@@ -1,0 +1,7 @@
+{
+  "name": "llm-thesis-review",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ]
+}
