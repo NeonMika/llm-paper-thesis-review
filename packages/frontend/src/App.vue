@@ -1,35 +1,115 @@
 <script setup lang="ts">
-import { usePaperStore } from './stores/paper'
-import Button from 'primevue/button'
-import FileUpload, { type FileUploadSelectEvent } from 'primevue/fileupload'
-import ProgressSpinner from 'primevue/progressspinner'
-import Card from 'primevue/card'
-import Listbox from 'primevue/listbox'
+import { usePaperStore } from './stores/paperStore.ts'
+import { usePromptStore } from './stores/promptStore'
 import { marked } from 'marked'
+import Card from 'primevue/card'
 
 const paperStore = usePaperStore()
+const promptStore = usePromptStore()
 
-function handleFileChange(event: FileUploadSelectEvent) {
-  if (event.files && event.files.length > 0) {
-    paperStore.readPaperFromFile(event.files[0])
+function handleFileChange(event: Event) {
+  const input = event.target as HTMLInputElement
+  if (input.files && input.files.length > 0) {
+    paperStore.readPaperFromFile(input.files[0])
   }
 }
+
+const modelOptions = [
+  { label: 'Gemini 2.5 Pro', value: 'pro' },
+  { label: 'Gemini 2.5 Flash', value: 'flash' }
+]
+
+// Prompts initial laden
+promptStore.fetchSectionsSystemPrompt()
+promptStore.fetchReviewSystemPrompt()
+promptStore.fetchReviewMessagePart()
 </script>
 
 <template>
   <div class="p-grid p-justify-center">
     <div class="p-col-12 p-md-8">
+
+      <!-- Google Gemini Settings Card -->
+      <Card class="card">
+        <template #title>
+          <h2>Google Gemini Settings</h2>
+        </template>
+        <template #content>
+          <div class="form-group">
+            <label for="apiKey">API Key</label>
+            <input
+              id="apiKey"
+              type="text"
+              v-model="paperStore.apiKey"
+              placeholder="Optional: Own Google API Key"
+              class="p-mb-3"
+              style="width: 100%;"
+              autocomplete="off"
+            />
+          </div>
+          <p v-if="!paperStore.apiKey"><em>API key provided by Markus will be used if no API key is provided. If rate limits hit, provide your own key.</em></p>
+          <div class="form-group">
+            <label for="modelSelect">Modell</label>
+            <select
+              id="modelSelect"
+              v-model="paperStore.model"
+              class="p-mb-3"
+              style="width: 100%;"
+            >
+              <option value="" disabled>Modell wählen</option>
+              <option v-for="option in modelOptions" :key="option.value" :value="option.value">
+                {{ option.label }}
+              </option>
+            </select>
+          </div>
+        </template>
+      </Card>
+
+      <!-- Fehleranzeigen für alle Fehler aus paperStore und promptStore -->
       <div v-if="paperStore.sectionsError" class="p-error">
+        <h2>Sections Error</h2>
         <pre>{{ JSON.stringify(paperStore.sectionsError, null, 2) }}</pre>
       </div>
       <div v-if="paperStore.overallAnalysisError" class="p-error">
+        <h2>Overall Analysis Error</h2>
         <pre>{{ JSON.stringify(paperStore.overallAnalysisError, null, 2) }}</pre>
       </div>
       <div v-if="paperStore.reviewError" class="p-error">
+        <h2>Review Error</h2>
         <pre>{{ JSON.stringify(paperStore.reviewError, null, 2) }}</pre>
       </div>
       <div v-if="paperStore.sectionAnalysisError" class="p-error">
+        <h2>Section Analysis Error</h2>
         <pre>{{ JSON.stringify(paperStore.sectionAnalysisError, null, 2) }}</pre>
+      </div>
+
+      <div v-if="promptStore.overallAnalysisSystemPromptError" class="p-error">
+        <h2>Overall Analysis System Prompt Error</h2>
+        <pre>{{ JSON.stringify(promptStore.overallAnalysisSystemPromptError, null, 2) }}</pre>
+      </div>
+      <div v-if="promptStore.overallAnalysisMessagePartError" class="p-error">
+        <h2>Overall Analysis Message Part Error</h2>
+        <pre>{{ JSON.stringify(promptStore.overallAnalysisMessagePartError, null, 2) }}</pre>
+      </div>
+      <div v-if="promptStore.reviewSystemPromptError" class="p-error">
+        <h2>Review System Prompt Error</h2>
+        <pre>{{ JSON.stringify(promptStore.reviewSystemPromptError, null, 2) }}</pre>
+      </div>
+      <div v-if="promptStore.reviewMessagePartError" class="p-error">
+        <h2>Review Message Part Error</h2>
+        <pre>{{ JSON.stringify(promptStore.reviewMessagePartError, null, 2) }}</pre>
+      </div>
+      <div v-if="promptStore.sectionAnalysisSystemPromptError" class="p-error">
+        <h2>Section Analysis System Prompt Error</h2>
+        <pre>{{ JSON.stringify(promptStore.sectionAnalysisSystemPromptError, null, 2) }}</pre>
+      </div>
+      <div v-if="promptStore.sectionAnalysisMessagePartError" class="p-error">
+        <h2>Section Analysis Message Part Error</h2>
+        <pre>{{ JSON.stringify(promptStore.sectionAnalysisMessagePartError, null, 2) }}</pre>
+      </div>
+      <div v-if="promptStore.sectionsSystemPromptError" class="p-error">
+        <h2>Sections System Prompt Error</h2>
+        <pre>{{ JSON.stringify(promptStore.sectionsSystemPromptError, null, 2) }}</pre>
       </div>
 
       <Card class="card">
@@ -43,37 +123,39 @@ function handleFileChange(event: FileUploadSelectEvent) {
           </p>
 
           <form>
-            <FileUpload
-              mode="basic"
+            <input
+              type="file"
               name="paper"
-              :customUpload="true"
-              @select="handleFileChange"
+              @change="handleFileChange"
               :disabled="paperStore.loading"
-              chooseLabel="Load a Paper"
               class="p-mb-3"
             />
 
-            <!-- Input to select paper type: "short paper" or "full paper" or "bachelor thesis" or "master thesis" -->
-            <Listbox
-              v-model="paperStore.paperType"
-              :options="paperStore.paperTypes"
-              option-label="optionLabel"
-              option-value="optionValue"
-              class="p-mb-3"
-            >
-            </Listbox>
+            <div class="form-group">
+              <label for="paperType">Paper Type: </label>
+              <select
+                id="paperType"
+                v-model="paperStore.paperType"
+                class="p-mb-3"
+              >
+                <option v-for="type in paperStore.paperTypes" :key="type.optionValue" :value="type.optionValue">
+                  {{ type.optionLabel }}
+                </option>
+              </select>
+            </div>
 
             <div class="form-group">
-            <input type="checkbox" id="wip" v-model="paperStore.wip" />
-            <label for="wip">Work in Progress</label>
+              <input type="checkbox" id="wip" v-model="paperStore.wip" />
+              <label for="wip">Work in Progress</label>
             </div>
 
             <div class="form-group">
               <input type="checkbox" id="hasPageLimit" v-model="paperStore.hasPageLimit" />
-              <label for="wip">Has Page Limit</label>
+              <label for="hasPageLimit">Has Page Limit</label>
             </div>
 
             <div v-if="paperStore.hasPageLimit" class="form-group">
+              <label for="pageLimit">Page Limit (# of pages)</label>
               <input
                 type="number"
                 id="pageLimit"
@@ -81,10 +163,10 @@ function handleFileChange(event: FileUploadSelectEvent) {
                 step="0.5"
                 min="0"
               />
-              <label for="pageLimit">Page Limit (# of pages)</label>
             </div>
 
             <div v-if="paperStore.hasPageLimit" class="form-group">
+              <label for="currentPages">Current # of pages</label>
               <input
                 type="number"
                 id="currentPages"
@@ -92,7 +174,6 @@ function handleFileChange(event: FileUploadSelectEvent) {
                 step="0.5"
                 min="0"
               />
-              <label for="currentPages">Current # of pages</label>
             </div>
           </form>
         </template>
@@ -125,14 +206,14 @@ function handleFileChange(event: FileUploadSelectEvent) {
           <div>
             <strong>System Prompt:</strong><br>
             <pre
-              v-if="paperStore.overallAnalysisSystemPrompt"
+              v-if="promptStore.overallAnalysisSystemPrompt"
               class="prompt-pre"
-            >{{ paperStore.overallAnalysisSystemPrompt }}</pre>
+            >{{ promptStore.overallAnalysisSystemPrompt }}</pre>
             <strong>Message Part:</strong><br>
             <pre
-              v-if="paperStore.overallAnalysisMessagePart"
+              v-if="promptStore.overallAnalysisMessagePart"
               class="prompt-pre"
-            >{{ paperStore.overallAnalysisMessagePart }}</pre>
+            >{{ promptStore.overallAnalysisMessagePart }}</pre>
             <strong>Result:</strong><br>
             <div
               v-if="paperStore.loadingOverallAnalysis"
@@ -166,14 +247,14 @@ function handleFileChange(event: FileUploadSelectEvent) {
           <div>
             <strong>System Prompt:</strong><br>
             <pre
-              v-if="paperStore.reviewSystemPrompt"
+              v-if="promptStore.reviewSystemPrompt"
               class="prompt-pre"
-            >{{ paperStore.reviewSystemPrompt }}</pre>
+            >{{ promptStore.reviewSystemPrompt }}</pre>
             <strong>Message Part:</strong><br>
             <pre
-              v-if="paperStore.reviewMessagePart"
+              v-if="promptStore.reviewMessagePart"
               class="prompt-pre"
-            >{{ paperStore.reviewMessagePart }}</pre>
+            >{{ promptStore.reviewMessagePart }}</pre>
             <strong>Result:</strong><br>
             <div
               v-if="paperStore.loadingReview"
@@ -207,9 +288,9 @@ function handleFileChange(event: FileUploadSelectEvent) {
           <div>
             <strong>System Prompt:</strong><br>
             <pre
-              v-if="paperStore.sectionsSystemPrompt"
+              v-if="promptStore.sectionsSystemPrompt"
               class="prompt-pre"
-            >{{ paperStore.sectionsSystemPrompt }}</pre>
+            >{{ promptStore.sectionsSystemPrompt }}</pre>
             <strong>Result:</strong><br>
             <div
               v-if="paperStore.loadingSections"
@@ -229,14 +310,14 @@ function handleFileChange(event: FileUploadSelectEvent) {
                     <div>
                       <strong>System Prompt:</strong><br>
                       <pre
-                        v-if="paperStore.sectionAnalysisSystemPrompt"
+                        v-if="promptStore.sectionAnalysisSystemPrompt[section.title]"
                         class="prompt-pre"
-                      >{{ paperStore.sectionAnalysisSystemPrompt }}</pre>
+                      >{{ promptStore.sectionAnalysisSystemPrompt[section.title] }}</pre>
                       <strong>Message Part:</strong><br>
                       <pre
-                        v-if="paperStore.sectionAnalysisMessagePart"
+                        v-if="promptStore.sectionAnalysisMessagePart[section.title]"
                         class="prompt-pre"
-                      >{{ paperStore.sectionAnalysisMessagePart }}</pre>
+                      >{{ promptStore.sectionAnalysisMessagePart[section.title] }}</pre>
                       <strong>Result:</strong><br>
                       <div
                         v-if="paperStore.loadingSectionAnalysis"

@@ -20,6 +20,7 @@ function google(apiKey: string | null | undefined) {
 
 const sectionsBodySchema = t.Object({
     apiKey: t.Optional(t.String()),
+    model: t.Union([t.Literal("pro"), t.Literal("flash")]),
     file: t.File()
 })
 
@@ -27,23 +28,38 @@ type SectionsBody = typeof sectionsBodySchema.static
 
 const reviewBodySchema = t.Object({
     apiKey: t.Optional(t.String()),
-    file: t.File()
+    model: t.Union([t.Literal("pro"), t.Literal("flash")]),
+    file: t.File(),
+    hasPageLimit: t.Optional(t.BooleanString()),
+    pageLimit: t.Optional(t.String()), // since requests with files are sent with multipart/form-data, we use string here
+    currentPages: t.Optional(t.String()),  // since requests with files are sent with multipart/form-data, we use string here
+    kind: t.Union([
+        t.Literal("short conference paper"),
+        t.Literal("full conference paper"),
+        t.Literal("journal paper"),
+        t.Literal("bachelor thesis"),
+        t.Literal("master thesis"),
+        t.Literal("university seminar paper")
+    ])
 })
 
 type ReviewBody = typeof reviewBodySchema.static
 
 const analysisBodySchema = t.Object({
     apiKey: t.Optional(t.String()),
+    model: t.Union([t.Literal("pro"), t.Literal("flash")]),
     file: t.File({format: ['image', 'text', 'application/pdf', '.tex']}),
     hasPageLimit: t.Optional(t.BooleanString()),
     pageLimit: t.Optional(t.String()), // since requests with files are sent with multipart/form-data, we use string here
     currentPages: t.Optional(t.String()),  // since requests with files are sent with multipart/form-data, we use string here
     workInProgress: t.Optional(t.BooleanString()),
-    kind: /* either "paper", "bsc-thesis" or "msc-thesis" */ t.Union([
-        t.Literal("short paper"),
-        t.Literal("full paper"),
+    kind: t.Union([
+        t.Literal("short conference paper"),
+        t.Literal("full conference paper"),
+        t.Literal("journal paper"),
         t.Literal("bachelor thesis"),
-        t.Literal("master thesis")
+        t.Literal("master thesis"),
+        t.Literal("university seminar paper")
     ])
 })
 
@@ -51,6 +67,7 @@ type AnalysisBody = typeof analysisBodySchema.static
 
 const sectionAnalysisBodySchema = t.Object({
     apiKey: t.Optional(t.String()),
+    model: t.Union([t.Literal("pro"), t.Literal("flash")]),
     file: t.File({format: ['image', 'text', 'application/pdf', '.tex']}),
     hasPageLimit: t.Optional(t.BooleanString()),
     pageLimit: t.Optional(t.String()), // since requests with files are sent with multipart/form-data, we use string here
@@ -58,10 +75,12 @@ const sectionAnalysisBodySchema = t.Object({
     sectionTitle: t.String(),
     workInProgress: t.Optional(t.BooleanString()),
     kind: t.Union([
-        t.Literal("short paper"),
-        t.Literal("full paper"),
+        t.Literal("short conference paper"),
+        t.Literal("full conference paper"),
+        t.Literal("journal paper"),
         t.Literal("bachelor thesis"),
-        t.Literal("master thesis")
+        t.Literal("master thesis"),
+        t.Literal("university seminar paper")
     ])
 });
 
@@ -171,7 +190,8 @@ You are proficient in computer science and software engineering, with expert kno
 You analyze ${body.workInProgress ? "a work in progress, so keep this in mind. You can already suggest improvements for parts that are not yet implemented or marked with TODO." : "a completed work that is ready for review before submission."}
 ${body.hasPageLimit ? `The ${body.kind} has a page limit of ${body.pageLimit} pages, and currently has ${body.currentPages} pages. Keep this restriction in mind when suggesting changes.` : "The work does not have a page limit."}
 
-Be honest, your analyses, feedback and suggestions should be in a friendly but professional and constructive tone.
+Be really honest, do not hold back critique if necessary.
+Your analyses, feedback and suggestions must be helpful, they should be professional and in a constructive tone.
 
 Important: When analyzing text files, always ignore comments (for example, lines starting with % in LaTeX or similar comment syntax in other formats). Comments are not part of the actual content and should not be considered in your analysis.
 `;
@@ -217,47 +237,105 @@ Provide concise, focused, concrete actionable improvements:
 }
 
 function getReviewSystemPrompt() {
-    return `You are an intelligent reviewer for a scientific computer science paper. You are proficient in computer science and software engineering, with expert knowledge in technical and scientific writing in the field of computer science.
+    return `# ROLE AND GOAL
+    
+You are a world-class, seasoned reviewer for a top-tier scientific computer science conference. Your expertise spans computer science and software engineering, with a deep understanding of academic research methodologies and technical writing standards. Your tone is critical but collegial, firm but fair.
 
-You provide a review according.
+Your primary goal is to provide a critical, insightful, and constructive review that serves two purposes:
+1.  **For the Program Committee:** To help them make a fair and informed decision about whether to accept the paper. This involves a clear recommendation and a robust justification based on the provided criteria.
+2.  **For the Authors:** To provide clear, actionable feedback that helps them improve their current and future work, regardless of the acceptance decision. You are a mentor helping to elevate the quality of science in the field.
 
-You provide your review to achieve the following conference goals:
-- Accept high quality papers
-- Give clear feedback to papers of insufficient quality
-- Ensure an unbiased decision-making process
-- Embrace diversity of perspectives, but work in an inclusive, safe, collegial environment
+You must operate within the conference's guiding principles:
+- **Uphold Quality:** Champion technically sound, significant, and novel work.
+- **Provide Clarity:** Deliver clear, well-justified feedback, especially for rejections.
+- **Ensure Fairness:** Base your review strictly on the paper's content and the review criteria, avoiding personal bias.
+- **Be Professional:** Maintain a respectful, collegial, and constructive tone at all times.
 
-A possible strategy for your review is:
-- First of all remember the review criteria:
---- Soundness
---- Significance
---- Novelty
---- Verifiability and Transparency
---- Presentation
-- Use notes to outline a review organized by the five criteria, so authors can understand your judgments for each criteria.
-- Draft your review based on your outline notes.
-- Edit your review, making it as constructive and clear as possible. Even a very negative review should be respectful to the author(s), helping to educate them.
-- Based on your review and your assessment of the individual criteria, choose a recommendation score (papers that meet all of the criteria should be strongly accepted (though this does not imply that the paper is perfect); papers that fail to meet most of the criteria should be strongly rejected):
---- +3 Strong accept, award quality - this paper should be accepted and it is a good candidate for a distinguished paper award
---- +2 Accept – this paper should be accepted
---- +1 Weak accept – this paper may be accepted, but I will not fight for it
---- -1 Weak reject – this paper may be rejected, but I will not fight against it
---- -2 Reject – this paper should be rejected
+# CORE REVIEW CRITERIA
 
-Remember that your review is not only a judgment of the paper, but also a service to the authors. Your review should help them improve their work, even if it is rejected.
+You will structure your detailed analysis around the following five criteria. Your review must explicitly and logically connect back to your assessment against these definitions:
 
-Excellent reviews are:
-- Constructive, explicitly identifying the merits of the work, as well as feasible  ways of addressing any of its weaknesses.
-- Insightful, demonstrating expertise on the topic and methods in a work.
-- Organized, helping the authors clearly understand the reviewer’s opinions of strengths and weaknesses of the work.
-- Impartial, demonstrating a commitment to the reviewing criteria of the conference, and not personal interests, speculation, or bias.
+- **1. Soundness:** Are the claims well-supported by rigorous evidence? Is the methodology correct and appropriate for the problem? Are the experiments, proofs, or theoretical arguments free of fatal flaws? Are the assumptions clearly stated and justified? **(A paper with fatal flaws in soundness cannot be accepted.)**
+- **2. Significance:** Does this work matter? Does it address an important problem or open a new, interesting line of inquiry? Is the contribution impactful, or is it merely an incremental improvement? Who is the intended audience, and why should they care?
+- **3. Novelty:** Is the contribution new and original? Does it provide a new theoretical insight, a new method, a new system, a new evaluation, or a new perspective on an old problem? Is the related work section comprehensive and does it accurately position the paper's contribution with respect to prior art?
+- **4. Verifiability and Transparency:** Is the work presented in a way that would allow an expert to reproduce the results? Are the artifacts (code, data, etc.) available and well-documented? If not, is the methodology described with sufficient detail and clarity to allow for independent implementation and verification?
+- **5. Presentation and Clarity:** Is the paper well-organized, well-written, and easy to understand? Are the figures and tables clear and purposeful? Does the paper effectively communicate its core ideas and contributions to the intended audience? Is the prose free of major grammatical errors?
+
+# REVIEW SCORING
+
+Based on your detailed analysis, you must provide an overall recommendation score. This score is a synthesis of your assessment across all criteria. **Your justification must explain how you weighed the criteria.** For example, a paper that is sound and well-presented but has low novelty and significance might be a "Weak Reject," while a highly novel and significant paper with minor, fixable soundness issues might be a "Weak Accept."
+
+--- +3 Strong accept, award quality - A top paper for the conference. It excels across all criteria.
+--- +2 Accept – A solid paper that clearly meets the bar for acceptance. It is sound, significant, and novel.
+--- +1 Weak accept – A borderline paper that has merit but also contains notable weaknesses. I will not fight for it, but I am okay with it being accepted.
+--- -1 Weak reject – A borderline paper where the weaknesses slightly outweigh the strengths. I will not fight to reject it, but I lean towards rejection.
+--- -2 Reject – A paper with clear, significant flaws in one or more core criteria. It should not be accepted in its current form.
+--- -3 Strong Reject – A paper with fatal flaws (e.g., unsound methodology, incorrect claims, plagiarism) that falls far below the conference standard.
+
+# OUTPUT FORMAT
+
+Your final review must be structured using the following Markdown template. Do not deviate from this format.
+
+### Summary of the Paper
+[Provide a concise, neutral summary of the paper's core problem, proposed solution, and key results in 3-5 sentences. This demonstrates your understanding of the work.]
+
+### Overall Assessment and Justification of Score
+[In a single paragraph, synthesize your critique. State the paper's main contribution and its most significant strengths and weaknesses. Crucially, explain how you weighed the criteria (e.g., "While the work is highly novel, its critical soundness issues prevent me from recommending acceptance, leading to my score of -2.")]
+
+### Strengths
+- **[Strength 1 (e.g., Significance, Novelty)]:** [Briefly describe a major strength, tying it back to a core criterion. E.g., "Addresses a highly relevant and challenging problem in distributed systems."]
+- **[Strength 2]:** ...
+
+### Major Weaknesses
+- **[Weakness 1 (e.g., Soundness, Verifiability)]:** [Describe a major flaw. E.g., "The core theoretical claim in Section 3 is not supported by the provided proof, which appears to have a logical gap in step 2."]
+- **[Weakness 2]:** ...
+
+### Detailed Analysis (Structured by Core Criteria)
+This section provides a detailed breakdown of the assessment against the five core criteria.
+
+**1. Soundness:**
+[Your detailed comments. Reference specific sections, figures, or equations.]
+
+**2. Significance:**
+[Your detailed comments.]
+
+**3. Novelty:**
+[Your detailed comments. Mention specific related work if necessary.]
+
+**4. Verifiability and Transparency:**
+[Your detailed comments. If the paper is unclear, state it here as a barrier to verification.]
+
+**5. Presentation and Clarity:**
+[Your detailed comments.]
+
+### Actionable Suggestions for Improvement
+[Provide a list of specific, constructive suggestions. Frame them clearly.]
+- **For a Potential Revision (if applicable):** [List the most critical changes that could potentially elevate the paper to an acceptable standard. E.g., "To address the soundness concerns, the authors must either correct the proof in Section 3 or moderate their claim."]
+- **For Future Work or Minor Polish:** [List less critical suggestions, typos, or ideas that are out of scope for this version but would be valuable for the authors. E.g., "Consider exploring the performance of your algorithm on ARM architectures in future work.", "Typo on page 5, line 23: 'teh' should be 'the'."]
+
+### Overall Recommendation Score
+[Insert one of: +3, +2, +1, -1, -2, -3]
+
+### Confidential Comments to the Program Committee (Optional)
+[Use this section *only* for comments not appropriate for the authors. Examples: concerns about policy violations, meta-commentary on your own confidence, or context about the research area.]
+
+# CRITICAL INSTRUCTIONS & CONSTRAINTS
+
+- **Embody the Persona:** Use precise, academic language. Refer to "the authors," "the manuscript," "this work." Your tone should reflect deep expertise and a genuine desire to improve the paper and the field.
+- **Justify, Don't Just State:** Be specific. Instead of "The related work is incomplete," say "The related work section is missing key citations, such as [Author, Year], which proposed a similar approach."
+- **Frame Critiques Constructively:** Instead of "The evaluation is weak," write "The evaluation could be strengthened by including a comparison to baseline X, which would provide a clearer picture of the method's relative performance."
+- **Acknowledge Strengths:** Every review, even a strong reject, must identify and acknowledge the paper's strengths.
+- **Handle Ambiguity Professionally:** If a section is ambiguous or lacks detail, state this clearly as a review finding. E.g., "The description of the algorithm is too high-level, preventing a full assessment of its soundness and reproducibility." This places the onus on the authors to improve clarity.
+- **No Hallucinations:** If you are not familiar with a cited paper, do not invent details about it. It is better to state, "The comparison to [Author, Year] is not sufficiently detailed for me to assess its implications."
 `;
 }
 
-function getReviewMessagePart(): TextPart {
+function getReviewMessagePart(body : ReviewBody): TextPart {
     return {
         type: 'text',
-        text: `Analyze the provided work. First, take notes for your review, then finally present the final review that should be sent to the authors.`
+        text: `Analyze the provided ${body.kind}.
+${body.hasPageLimit ? `The ${body.kind} has a page limit of ${body.pageLimit} pages, and currently has ${body.currentPages} pages.` : "The work does not have a page limit."}
+First, take notes for your review, then finally present the final review that should be sent to the authors.`
     }
 }
 
@@ -265,10 +343,11 @@ function getSectionAnalysisSystemPrompt(body: SectionAnalysisBody) {
     return `You are an intelligent writing assistant for reviewing a computer science ${body.kind}.
 You are proficient in computer science and software engineering, with expert knowledge in technical and scientific writing in the field of computer science.
 
-You analyze on specific section in ${body.workInProgress ? "a work in progress, so keep this in mind. You can already suggest improvements for parts that are not yet implemented or marked with TODO." : "a completed work that is ready for review before submission."}
+You analyze one specific section in ${body.workInProgress ? "a work in progress, so keep this in mind. You can already suggest improvements for parts that are not yet implemented or marked with TODO." : "a completed work that is ready for review before submission."}
 ${body.hasPageLimit ? `The ${body.kind} has a page limit of ${body.pageLimit} pages, and currently has ${body.currentPages} pages. Keep this restriction in mind when suggesting changes.` : "The work does not have a page limit."}
 
-Be honest, your analyses, feedback and suggestions should be in a friendly but professional and constructive tone.
+Be really honest, do not hold back critique if necessary.
+Your analyses, feedback and suggestions must be helpful, they should be professional and in a constructive tone.
 
 Important: When analyzing text files, always ignore comments (for example, lines starting with % in LaTeX or similar comment syntax in other formats). Comments are not part of the actual content and should not be considered in your analysis.
 `;
@@ -314,11 +393,24 @@ function getSectionsSystemPrompt() {
 }
 
 // Hilfsfunktion für Literal-Typen
-function parseKind(kind: string | undefined): "short paper" | "full paper" | "bachelor thesis" | "master thesis" {
-    if (kind === "short paper" || kind === "full paper" || kind === "bachelor thesis" || kind === "master thesis") {
+function parseKind(kind: string | undefined): "short conference paper" | "full conference paper" | "journal paper" | "bachelor thesis" | "master thesis" | "university seminar paper" {
+    if (
+        kind === "short conference paper" ||
+        kind === "full conference paper" ||
+        kind === "journal paper" ||
+        kind === "bachelor thesis" ||
+        kind === "master thesis" ||
+        kind === "university seminar paper"
+    ) {
         return kind;
     }
-    return "full paper";
+    return "full conference paper";
+}
+
+// Hilfsfunktion für Modellwahl
+function getModelFromBody(body: { model?: "pro" | "flash" }) {
+    if (body.model === "pro") return pro;
+    return flash;
 }
 
 const app = new Elysia({
@@ -341,7 +433,7 @@ const app = new Elysia({
     })
     .post("/overall_analysis", async ({body}) => {
         const result = await generateText({
-            model: google(body.apiKey)(flash),
+            model: google(body.apiKey)(getModelFromBody(body)),
             system: getOverallAnalysisSystemPrompt(body),
             prompt: [
                 {
@@ -365,7 +457,7 @@ const app = new Elysia({
     })
     .post("/section_analysis", async ({body}) => {
         const result = await generateText({
-            model: google(body.apiKey)(flash),
+            model: google(body.apiKey)(getModelFromBody(body)),
             system: getSectionAnalysisSystemPrompt(body),
             prompt: [
                 {
@@ -389,13 +481,13 @@ const app = new Elysia({
     })
     .post("/review", async ({body}) => {
         const result = await generateText({
-            model: google(body.apiKey)(flash),
+            model: google(body.apiKey)(getModelFromBody(body)),
             system: getReviewSystemPrompt(),
             prompt: [
                 {
                     role: 'user',
                     content: [
-                        getReviewMessagePart(),
+                        getReviewMessagePart(body),
                         await createFileOrImageMessagePart(body.file)
                     ]
                 }
@@ -487,7 +579,7 @@ const app = new Elysia({
         */
 
         const result = await generateObject({
-            model: google(body.apiKey)(flash),
+            model: google(body.apiKey)(getModelFromBody(body)),
             schemaName: "SectionTitles",
             schemaDescription: "A list of sections extracted from a document, including optional information about numbering and sub(sub)sections.",
             schema: z.array(zSectionSchema),
@@ -533,10 +625,11 @@ const app = new Elysia({
     }, {
         response: t.String(),
     })
-    .post("/review_message_part", () => {
-        return getReviewMessagePart().text;
+    .post("/review_message_part", ({body}) => {
+        return getReviewMessagePart(body).text;
     }, {
         response: t.String(),
+        body: reviewBodySchema
     })
     .post("/section_analysis_system_prompt", ({body}) => {
         return getSectionAnalysisSystemPrompt(body);
