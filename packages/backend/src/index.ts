@@ -2,9 +2,72 @@ import {Elysia, sse, t} from 'elysia'
 import {swagger} from '@elysiajs/swagger'
 import {cors} from '@elysiajs/cors'
 
-import {FilePart, generateObject, generateText, ImagePart, TextPart} from 'ai';
-import {google} from '@ai-sdk/google';
+import type {FilePart, ImagePart, TextPart} from 'ai';
+import {generateObject, generateText} from 'ai';
+import {createGoogleGenerativeAI} from '@ai-sdk/google';
 import {z} from 'zod';
+
+const pro = 'gemini-2.5-pro'
+const flash = 'gemini-2.5-flash'
+
+function google(apiKey: string | null | undefined) {
+    return createGoogleGenerativeAI({
+        apiKey: apiKey || process.env.GOOGLE_GENERATIVE_AI_API_KEY,
+    })
+}
+
+// Request body schemas
+
+const sectionsBodySchema = t.Object({
+    apiKey: t.Optional(t.String()),
+    file: t.File()
+})
+
+type SectionsBody = typeof sectionsBodySchema.static
+
+const reviewBodySchema = t.Object({
+    apiKey: t.Optional(t.String()),
+    file: t.File()
+})
+
+type ReviewBody = typeof reviewBodySchema.static
+
+const analysisBodySchema = t.Object({
+    apiKey: t.Optional(t.String()),
+    file: t.File({format: ['image', 'text', 'application/pdf', '.tex']}),
+    hasPageLimit: t.Optional(t.BooleanString()),
+    pageLimit: t.Optional(t.String()), // since requests with files are sent with multipart/form-data, we use string here
+    currentPages: t.Optional(t.String()),  // since requests with files are sent with multipart/form-data, we use string here
+    workInProgress: t.Optional(t.BooleanString()),
+    kind: /* either "paper", "bsc-thesis" or "msc-thesis" */ t.Union([
+        t.Literal("short paper"),
+        t.Literal("full paper"),
+        t.Literal("bachelor thesis"),
+        t.Literal("master thesis")
+    ])
+})
+
+type AnalysisBody = typeof analysisBodySchema.static
+
+const sectionAnalysisBodySchema = t.Object({
+    apiKey: t.Optional(t.String()),
+    file: t.File({format: ['image', 'text', 'application/pdf', '.tex']}),
+    hasPageLimit: t.Optional(t.BooleanString()),
+    pageLimit: t.Optional(t.String()), // since requests with files are sent with multipart/form-data, we use string here
+    currentPages: t.Optional(t.String()), // since requests with files are sent with multipart/form-data, we use string here
+    sectionTitle: t.String(),
+    workInProgress: t.Optional(t.BooleanString()),
+    kind: t.Union([
+        t.Literal("short paper"),
+        t.Literal("full paper"),
+        t.Literal("bachelor thesis"),
+        t.Literal("master thesis")
+    ])
+});
+
+type SectionAnalysisBody = typeof sectionAnalysisBodySchema.static;
+
+// Response schemas
 
 const sectionSchema = t.Object({
     title: t.String(),
@@ -52,42 +115,9 @@ const zSectionSchema =
 
 type Section = typeof sectionSchema.static;
 
-const analysisBodySchema = t.Object({
-    file: t.File({format: ['image', 'text', 'application/pdf', '.tex']}),
-    hasPageLimit: t.Optional(t.BooleanString()),
-    pageLimit: t.Optional(t.String()), // since requests with files are sent with multipart/form-data, we use string here
-    currentPages: t.Optional(t.String()),  // since requests with files are sent with multipart/form-data, we use string here
-    workInProgress: t.Optional(t.BooleanString()),
-    kind: /* either "paper", "bsc-thesis" or "msc-thesis" */ t.Union([
-        t.Literal("short paper"),
-        t.Literal("full paper"),
-        t.Literal("bachelor thesis"),
-        t.Literal("master thesis")
-    ])
-})
-
-type AnalysisBody = typeof analysisBodySchema.static
-
-const sectionAnalysisBodySchema = t.Object({
-    file: t.File({format: ['image', 'text', 'application/pdf', '.tex']}),
-    hasPageLimit: t.Optional(t.BooleanString()),
-    pageLimit: t.Optional(t.String()), // since requests with files are sent with multipart/form-data, we use string here
-    currentPages: t.Optional(t.String()), // since requests with files are sent with multipart/form-data, we use string here
-    sectionTitle: t.String(),
-    workInProgress: t.Optional(t.BooleanString()),
-    kind: t.Union([
-        t.Literal("short paper"),
-        t.Literal("full paper"),
-        t.Literal("bachelor thesis"),
-        t.Literal("master thesis")
-    ])
-});
-
-type SectionAnalysisBody = typeof sectionAnalysisBodySchema.static;
-
 async function createFileOrImageMessagePart(file: File): Promise<ImagePart | FilePart> {
     let mediaType;
-    let type : 'file' | 'image';
+    let type: 'file' | 'image';
     // Get the file extension and convert to lower case for reliable matching.
     const extension = (file.name.split('.').pop() ?? 'txt').toLowerCase();
 
@@ -133,9 +163,6 @@ async function createFileOrImageMessagePart(file: File): Promise<ImagePart | Fil
     }
 
 }
-
-const pro = 'gemini-2.5-pro'
-const flash = 'gemini-2.5-flash'
 
 function getOverallAnalysisSystemPrompt(body: AnalysisBody) {
     return `You are an intelligent writing assistant for reviewing a computer science ${body.kind}.
@@ -314,7 +341,7 @@ const app = new Elysia({
     })
     .post("/overall_analysis", async ({body}) => {
         const result = await generateText({
-            model: google(flash),
+            model: google(body.apiKey)(flash),
             system: getOverallAnalysisSystemPrompt(body),
             prompt: [
                 {
@@ -338,7 +365,7 @@ const app = new Elysia({
     })
     .post("/section_analysis", async ({body}) => {
         const result = await generateText({
-            model: google(flash),
+            model: google(body.apiKey)(flash),
             system: getSectionAnalysisSystemPrompt(body),
             prompt: [
                 {
@@ -362,7 +389,7 @@ const app = new Elysia({
     })
     .post("/review", async ({body}) => {
         const result = await generateText({
-            model: google(flash),
+            model: google(body.apiKey)(flash),
             system: getReviewSystemPrompt(),
             prompt: [
                 {
@@ -381,9 +408,7 @@ const app = new Elysia({
     }, {
         type: "multipart/form-data",
         parse: 'multipart/form-data', // According to https://github.com/elysiajs/elysia/discussions/676
-        body: t.Object({
-            file: t.File()
-        }),
+        body: reviewBodySchema,
         response: t.String(),
     })
     .post("/sections", async ({body}) => {
@@ -462,7 +487,7 @@ const app = new Elysia({
         */
 
         const result = await generateObject({
-            model: google(flash),
+            model: google(body.apiKey)(flash),
             schemaName: "SectionTitles",
             schemaDescription: "A list of sections extracted from a document, including optional information about numbering and sub(sub)sections.",
             schema: z.array(zSectionSchema),
@@ -486,27 +511,22 @@ const app = new Elysia({
     }, {
         type: "multipart/form-data",
         parse: 'multipart/form-data', // According to https://github.com/elysiajs/elysia/discussions/676
-        body: t.Object({
-            file: t.File()
-        }),
+        body: sectionsBodySchema,
         response: t.Array(sectionSchema),
     })
-    .post("/overall_analysis_system_prompt", ({ body }) => {
+    .post("/overall_analysis_system_prompt", ({body}) => {
         return getOverallAnalysisSystemPrompt(body);
     }, {
         parse: 'multipart/form-data',
         body: analysisBodySchema,
         response: t.String(),
     })
-    .post("/overall_analysis_message_part", ({ body }) => {
-        return getOverallAnalysisMessagePart(body);
+    .post("/overall_analysis_message_part", ({body}) => {
+        return getOverallAnalysisMessagePart(body).text;
     }, {
         parse: 'multipart/form-data',
         body: analysisBodySchema,
-        response: t.Object({
-            type: t.Literal("text"),
-            text: t.String()
-        }),
+        response: t.String(),
     })
     .post("/review_system_prompt", () => {
         return getReviewSystemPrompt();
@@ -514,29 +534,23 @@ const app = new Elysia({
         response: t.String(),
     })
     .post("/review_message_part", () => {
-        return getReviewMessagePart();
+        return getReviewMessagePart().text;
     }, {
-        response: t.Object({
-            type: t.Literal("text"),
-            text: t.String()
-        }),
+        response: t.String(),
     })
-    .post("/section_analysis_system_prompt", ({ body }) => {
+    .post("/section_analysis_system_prompt", ({body}) => {
         return getSectionAnalysisSystemPrompt(body);
     }, {
         parse: 'multipart/form-data',
         body: sectionAnalysisBodySchema,
         response: t.String(),
     })
-    .post("/section_analysis_message_part", ({ body }) => {
-        return getSectionAnalysisMessagePart(body);
+    .post("/section_analysis_message_part", ({body}) => {
+        return getSectionAnalysisMessagePart(body).text;
     }, {
         parse: 'multipart/form-data',
         body: sectionAnalysisBodySchema,
-        response: t.Object({
-            type: t.Literal("text"),
-            text: t.String()
-        }),
+        response: t.String(),
     })
     .get("/sections_system_prompt", () => {
         return getSectionsSystemPrompt();
@@ -551,4 +565,4 @@ console.log(
 
 type App = typeof app;
 
-export {App, Section};
+export type {App, Section}

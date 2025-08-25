@@ -3,7 +3,9 @@
   "version": "1.0.50",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "dev": "bun run --watch src/index.ts"
+    "dev": "bun run --watch src/index.ts",
+    "prod-binary": "bun build --compile --minify-whitespace --minify-syntax --target bun --outfile build/server ./src/index.ts",
+    "prod": "bun build --minify-whitespace --minify-syntax --target bun --outfile build/server ./src/index.ts"
   },
   "dependencies": {
     "@ai-sdk/google": "^2.0.2",
