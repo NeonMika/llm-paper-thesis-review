@@ -1,11 +1,12 @@
-import { computed, ref, watch } from 'vue'
+import { ref, watch } from 'vue'
 import { defineStore, storeToRefs } from 'pinia'
 import api from '../api'
 import { usePaperStore } from './paperStore.ts'
 
 export const usePromptStore = defineStore('promptStore', () => {
   const overallAnalysisSystemPrompt = ref('')
-  const overallAnalysisMessagePart = ref('')
+  const overallGeneralAnalysisMessagePart = ref('')
+  const overallDetailedAnalysisMessagePart = ref('')
   const reviewSystemPrompt = ref('')
   const reviewMessagePart = ref('')
   // Für jede Section ein Prompt/MessagePart
@@ -15,7 +16,8 @@ export const usePromptStore = defineStore('promptStore', () => {
 
   // Separate Fehler für jede Fetch-Funktion
   const overallAnalysisSystemPromptError = ref<unknown | null>(null)
-  const overallAnalysisMessagePartError = ref<unknown | null>(null)
+  const overallGeneralAnalysisMessagePartError = ref<unknown | null>(null)
+  const overallDetailedAnalysisMessagePartError = ref<unknown | null>(null)
   const reviewSystemPromptError = ref<unknown | null>(null)
   const reviewMessagePartError = ref<unknown | null>(null)
   // Nur jeweils ein Fehler für die zuletzt abgefragte Section
@@ -37,7 +39,10 @@ export const usePromptStore = defineStore('promptStore', () => {
   } = storeToRefs(paperStore)
 
   async function fetchOverallAnalysisSystemPrompt() {
-    if (!file.value || !paperType.value) return
+    if (!file.value || !paperType.value) {
+      overallAnalysisSystemPromptError.value = `fetchOverallAnalysisSystemPrompt: file and paperType müssen gesetzt sein. file: ${!!file.value}, paperType: ${!!paperType.value}`
+      return
+    }
     try {
       const { data, error } = await api.overall_analysis_system_prompt.post({
         file: file.value,
@@ -57,10 +62,14 @@ export const usePromptStore = defineStore('promptStore', () => {
     }
   }
 
-  async function fetchOverallAnalysisMessagePart() {
-    if (!file.value || !paperType.value) return
+  async function fetchGeneralOverallAnalysisMessagePart() {
+    console.log('fetchGeneralOverallAnalysisMessagePart called')
+    if (!file.value || !paperType.value) {
+      overallGeneralAnalysisMessagePartError.value = `fetchGeneralOverallAnalysisMessagePart: file und paperType müssen gesetzt sein. file: ${!!file.value}, paperType: ${!!paperType.value}`
+      return
+    }
     try {
-      const { data, error } = await api.overall_analysis_message_part.post({
+      const { data, error } = await api.overall_general_analysis_message_part.post({
         file: file.value,
         kind: paperType.value,
         workInProgress: wip.value,
@@ -71,14 +80,39 @@ export const usePromptStore = defineStore('promptStore', () => {
         model: model.value,
       })
       if (error) throw error
-      overallAnalysisMessagePart.value = data
-      overallAnalysisMessagePartError.value = null
+      overallGeneralAnalysisMessagePart.value = data
+      overallGeneralAnalysisMessagePartError.value = null
     } catch (err) {
-      overallAnalysisMessagePartError.value = err
+      overallGeneralAnalysisMessagePartError.value = err
+    }
+  }
+
+  async function fetchOverallAnalysisDetailedMessagePart() {
+    if (!file.value || !paperType.value) {
+      overallDetailedAnalysisMessagePartError.value = `fetchOverallAnalysisDetailedMessagePart: file und paperType müssen gesetzt sein. file: ${!!file.value}, paperType: ${!!paperType.value}`
+      return
+    }
+    try {
+      const { data, error } = await api.overall_detailed_analysis_message_part.post({
+        file: file.value,
+        kind: paperType.value,
+        workInProgress: wip.value,
+        hasPageLimit: hasPageLimit.value,
+        pageLimit: pageLimit.value + '',
+        currentPages: currentPages.value + '',
+        apiKey: apiKey.value || "",
+        model: model.value,
+      })
+      if (error) throw error
+      overallDetailedAnalysisMessagePart.value = data
+      overallDetailedAnalysisMessagePartError.value = null
+    } catch (err) {
+      overallDetailedAnalysisMessagePartError.value = err
     }
   }
 
   async function fetchReviewSystemPrompt() {
+    // keine Voraussetzungen
     try {
       const { data, error } = await api.review_system_prompt.post()
       if (error) throw error
@@ -90,8 +124,10 @@ export const usePromptStore = defineStore('promptStore', () => {
   }
 
   async function fetchReviewMessagePart() {
-    if (!file.value) return
-
+    if (!file.value) {
+      reviewMessagePartError.value = `fetchReviewMessagePart: file muss gesetzt sein. file: ${!!file.value}`
+      return
+    }
     try {
       const { data, error } = await api.review_message_part.post({
         file: file.value,
@@ -112,11 +148,14 @@ export const usePromptStore = defineStore('promptStore', () => {
 
   // Nur jeweils ein Fehler für die zuletzt abgefragte Section
   async function fetchSectionAnalysisSystemPrompt(sectionTitle: string) {
-    if (!file.value || !sectionTitle || !paperType.value) return
+    if (!file.value || !sectionTitle || !paperType.value) {
+      sectionAnalysisSystemPromptError.value = `fetchSectionAnalysisSystemPrompt: file, sectionTitle und paperType müssen gesetzt sein. file: ${!!file.value}, sectionTitle: ${!!sectionTitle}, paperType: ${!!paperType.value}`
+      return
+    }
     try {
       const { data, error } = await api.section_analysis_system_prompt.post({
         file: file.value,
-        sectionTitle,
+        sectionTitle : sectionTitle,
         kind: paperType.value,
         workInProgress: wip.value,
         hasPageLimit: hasPageLimit.value,
@@ -137,7 +176,10 @@ export const usePromptStore = defineStore('promptStore', () => {
   }
 
   async function fetchSectionAnalysisMessagePart(sectionTitle: string) {
-    if (!file.value || !sectionTitle || !paperType.value) return
+    if (!file.value || !sectionTitle || !paperType.value) {
+      sectionAnalysisMessagePartError.value = `fetchSectionAnalysisMessagePart: file, sectionTitle und paperType müssen gesetzt sein. file: ${!!file.value}, sectionTitle: ${!!sectionTitle}, paperType: ${!!paperType.value}`
+      return
+    }
     try {
       const { data, error } = await api.section_analysis_message_part.post({
         file: file.value,
@@ -162,6 +204,7 @@ export const usePromptStore = defineStore('promptStore', () => {
   }
 
   async function fetchSectionsSystemPrompt() {
+    // keine Voraussetzungen
     try {
       const { data, error } = await api.sections_system_prompt.get()
       if (error) throw error
@@ -175,10 +218,11 @@ export const usePromptStore = defineStore('promptStore', () => {
   // Automatisches Laden der Prompts & Message Parts, wenn alle nötigen Werte gesetzt sind
   watch([file, paperType, wip, hasPageLimit, pageLimit, currentPages], async () => {
     await fetchOverallAnalysisSystemPrompt()
-    await fetchOverallAnalysisMessagePart()
+    await fetchGeneralOverallAnalysisMessagePart()
+    await fetchOverallAnalysisDetailedMessagePart()
     await fetchReviewSystemPrompt()
     await fetchReviewMessagePart()
-  })
+  }, { immediate: true })
 
   // Für alle Sections Prompts/MessageParts laden
   watch([file, paperType, wip, hasPageLimit, pageLimit, currentPages, sections], async () => {
@@ -189,14 +233,15 @@ export const usePromptStore = defineStore('promptStore', () => {
         await fetchSectionAnalysisMessagePart(section.title)
       }
     }
-  })
+  }, { immediate: true })
 
   fetchSectionsSystemPrompt()
 
   return {
     // Prompts & Message Parts
     overallAnalysisSystemPrompt,
-    overallAnalysisMessagePart,
+    overallGeneralAnalysisMessagePart,
+    overallDetailedAnalysisMessagePart,
     reviewSystemPrompt,
     reviewMessagePart,
     sectionAnalysisSystemPrompt,
@@ -205,7 +250,8 @@ export const usePromptStore = defineStore('promptStore', () => {
 
     // Fehler (separat für jede Fetch-Funktion)
     overallAnalysisSystemPromptError,
-    overallAnalysisMessagePartError,
+    overallGeneralAnalysisMessagePartError,
+    overallDetailedAnalysisMessagePartError,
     reviewSystemPromptError,
     reviewMessagePartError,
     sectionAnalysisSystemPromptError,
@@ -214,7 +260,8 @@ export const usePromptStore = defineStore('promptStore', () => {
 
     // Methoden
     fetchOverallAnalysisSystemPrompt,
-    fetchOverallAnalysisMessagePart,
+    fetchGeneralOverallAnalysisMessagePart,
+    fetchOverallAnalysisDetailedMessagePart,
     fetchReviewSystemPrompt,
     fetchReviewMessagePart,
     fetchSectionAnalysisSystemPrompt,
@@ -222,4 +269,3 @@ export const usePromptStore = defineStore('promptStore', () => {
     fetchSectionsSystemPrompt,
   }
 })
-

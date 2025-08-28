@@ -197,15 +197,36 @@ Important: When analyzing text files, always ignore comments (for example, lines
 `;
 }
 
-function getOverallAnalysisMessagePart(body: AnalysisBody): TextPart {
+function getOverallGeneralAnalysisMessagePart(body: AnalysisBody): TextPart {
     return {
         type: 'text',
         text: `Provide a comprehensive analysis of the ${body.kind}, focusing on the following aspects:
 
 # Feedback
 
-First, carefully examine the whole ${body.kind}. Make sure that you completely understand what the work is about.
-Once you have fully internalized the topic, provide a general feedback according to the following points for the overall ${body.kind}:
+Carefully examine the whole ${body.kind}.
+Make sure that you completely understand what the work is about.
+Once you have fully internalized the topic, provide feedback according to the following points for the overall ${body.kind}:
+
+- Assess for **adherence to standards of scientific writing**.
+- Assess **understandability**. For example, are there areas where explanations are overly complicated or difficult to understand? Are enough examples and figures used to support complex parts? Are technical terms and abbreviations explained in enough detail?
+- Assess **structure**. We strive for good reading flow and readability. For example, does each chapter use a clear structure with subsections, paragraphs, and so on? Are structural elements (lists, enumerations, tables, etc.) used where applicable? Are conjunctions between sentences and transitions between sections and paragraphs used to enhance flow?
+- Assess **clarity and text quality**. We want easy-to-follow text that still provides enough detail.
+- Assess **all other quality aspects** that are relevant to a computer science ${body.kind}.
+`
+    }
+}
+
+function getOverallDetailedAnalysisMessagePart(body: AnalysisBody): TextPart {
+    return {
+        type: 'text',
+        text: `Provide a comprehensive analysis of the ${body.kind}, focusing on the following aspects:
+
+# Feedback
+
+First, carefully examine the whole ${body.kind}.
+Make sure that you completely understand what the work is about.
+Once you have fully internalized the topic, provide feedback according to the following points for the overall ${body.kind}:
 
 - Assess for **adherence to standards of scientific writing**.
 - Assess **understandability**. For example, are there areas where explanations are overly complicated or difficult to understand? Are enough examples and figures used to support complex parts? Are technical terms and abbreviations explained in enough detail?
@@ -330,7 +351,7 @@ This section provides a detailed breakdown of the assessment against the five co
 `;
 }
 
-function getReviewMessagePart(body : ReviewBody): TextPart {
+function getReviewMessagePart(body: ReviewBody): TextPart {
     return {
         type: 'text',
         text: `Analyze the provided ${body.kind}.
@@ -431,7 +452,7 @@ const app = new Elysia({
             yield sse("" + i);
         }
     })
-    .post("/overall_analysis", async ({body}) => {
+    .post("/overall_analysis_general", async ({body}) => {
         const result = await generateText({
             model: google(body.apiKey)(getModelFromBody(body)),
             system: getOverallAnalysisSystemPrompt(body),
@@ -439,11 +460,37 @@ const app = new Elysia({
                 {
                     role: 'user',
                     content: [
-                        getOverallAnalysisMessagePart(body),
+                        getOverallGeneralAnalysisMessagePart(body),
                         await createFileOrImageMessagePart(body.file)
                     ]
                 }
             ],
+            temperature: 0.7,
+        });
+
+        console.timeLog("Overall analysis result:", JSON.stringify(result, null, 2));
+
+        return result.text;
+    }, {
+        // type: "multipart/form-data",
+        parse: 'multipart/form-data', // According to https://github.com/elysiajs/elysia/discussions/676
+        body: analysisBodySchema,
+        response: t.String(),
+    })
+    .post("/overall_analysis_detailed", async ({body}) => {
+        const result = await generateText({
+            model: google(body.apiKey)(getModelFromBody(body)),
+            system: getOverallAnalysisSystemPrompt(body),
+            prompt: [
+                {
+                    role: 'user',
+                    content: [
+                        getOverallDetailedAnalysisMessagePart(body),
+                        await createFileOrImageMessagePart(body.file)
+                    ]
+                }
+            ],
+            temperature: 0.7,
         });
 
         console.timeLog("Overall analysis result:", JSON.stringify(result, null, 2));
@@ -468,6 +515,7 @@ const app = new Elysia({
                     ]
                 }
             ],
+            temperature: 0.7,
         });
 
         console.timeLog("Section analysis result:", JSON.stringify(result, null, 2));
@@ -492,6 +540,7 @@ const app = new Elysia({
                     ]
                 }
             ],
+            temperature: 0.7,
         });
 
         console.timeLog("Review result:", JSON.stringify(result, null, 2));
@@ -613,8 +662,15 @@ const app = new Elysia({
         body: analysisBodySchema,
         response: t.String(),
     })
-    .post("/overall_analysis_message_part", ({body}) => {
-        return getOverallAnalysisMessagePart(body).text;
+    .post("/overall_general_analysis_message_part", ({body}) => {
+        return getOverallGeneralAnalysisMessagePart(body).text;
+    }, {
+        parse: 'multipart/form-data',
+        body: analysisBodySchema,
+        response: t.String(),
+    })
+    .post("/overall_detailed_analysis_message_part", ({body}) => {
+        return getOverallDetailedAnalysisMessagePart(body).text;
     }, {
         parse: 'multipart/form-data',
         body: analysisBodySchema,

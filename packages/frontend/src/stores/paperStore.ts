@@ -51,6 +51,7 @@ export const usePaperStore = defineStore('paper', () => {
   function readPaperFromFile(readFile: File | null) {
     if (!readFile) return
 
+    /*
     const reader = new FileReader()
     reader.onload = (event) => {
       if (event.target?.result) {
@@ -60,7 +61,13 @@ export const usePaperStore = defineStore('paper', () => {
       }
     }
     loadingContent.value = true
-    reader.readAsText(readFile)
+
+     reader.readAsText(readFile)
+
+     */
+
+    file.value = readFile
+    content.value = "x"
   }
 
   function _reset() {
@@ -111,11 +118,34 @@ export const usePaperStore = defineStore('paper', () => {
     sections.value = data
   }
 
-  async function getOverallAnalysis() {
+  async function getOverallAnalysisGeneral() {
     if (!file.value || !paperType.value) return
 
     loadingOverallAnalysis.value = true
-    const { data, error } = await api.overall_analysis.post({
+    const { data, error } = await api.overall_analysis_general.post({
+      file: file.value,
+      kind: paperType.value,
+      workInProgress: wip.value,
+      hasPageLimit: hasPageLimit.value,
+      pageLimit: pageLimit.value + '',
+      currentPages: currentPages.value + '',
+      apiKey: apiKey.value || "",
+      model: model.value,
+    })
+    loadingOverallAnalysis.value = false
+    if (error) {
+      overallAnalysisError.value = error
+      throw error
+    }
+
+    overallAnalysis.value = data
+  }
+
+  async function getOverallAnalysisDetailed() {
+    if (!file.value || !paperType.value) return
+
+    loadingOverallAnalysis.value = true
+    const { data, error } = await api.overall_analysis_detailed.post({
       file: file.value,
       kind: paperType.value,
       workInProgress: wip.value,
@@ -221,7 +251,8 @@ export const usePaperStore = defineStore('paper', () => {
     // Methods
     readPaperFromFile,
     getSectionTitles,
-    getOverallAnalysis,
+    getOverallAnalysisGeneral,
+    getOverallAnalysisDetailed,
     getReview,
     enrichWithSectionAnalysis,
 

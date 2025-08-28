@@ -2,7 +2,9 @@
 import { usePaperStore } from './stores/paperStore.ts'
 import { usePromptStore } from './stores/promptStore'
 import { marked } from 'marked'
+import Button from 'primevue/button'
 import Card from 'primevue/card'
+import ProgressSpinner from 'primevue/progressspinner'
 
 const paperStore = usePaperStore()
 const promptStore = usePromptStore()
@@ -87,9 +89,13 @@ promptStore.fetchReviewMessagePart()
         <h2>Overall Analysis System Prompt Error</h2>
         <pre>{{ JSON.stringify(promptStore.overallAnalysisSystemPromptError, null, 2) }}</pre>
       </div>
-      <div v-if="promptStore.overallAnalysisMessagePartError" class="p-error">
-        <h2>Overall Analysis Message Part Error</h2>
-        <pre>{{ JSON.stringify(promptStore.overallAnalysisMessagePartError, null, 2) }}</pre>
+      <div v-if="promptStore.overallGeneralAnalysisMessagePartError" class="p-error">
+        <h2>Overall General Analysis Message Part Error</h2>
+        <pre>{{ JSON.stringify(promptStore.overallGeneralAnalysisMessagePartError, null, 2) }}</pre>
+      </div>
+      <div v-if="promptStore.overallDetailedAnalysisMessagePartError" class="p-error">
+        <h2>Overall Detailed Analysis Message Part Error</h2>
+        <pre>{{ JSON.stringify(promptStore.overallDetailedAnalysisMessagePartError, null, 2) }}</pre>
       </div>
       <div v-if="promptStore.reviewSystemPromptError" class="p-error">
         <h2>Review System Prompt Error</h2>
@@ -209,11 +215,16 @@ promptStore.fetchReviewMessagePart()
               v-if="promptStore.overallAnalysisSystemPrompt"
               class="prompt-pre"
             >{{ promptStore.overallAnalysisSystemPrompt }}</pre>
-            <strong>Message Part:</strong><br>
+            <strong>Message Part (General Analysis):</strong><br>
             <pre
-              v-if="promptStore.overallAnalysisMessagePart"
+              v-if="promptStore.overallGeneralAnalysisMessagePart"
               class="prompt-pre"
-            >{{ promptStore.overallAnalysisMessagePart }}</pre>
+            >{{ promptStore.overallGeneralAnalysisMessagePart }}</pre>
+            <strong>Message Part (Detailed Analysis):</strong><br>
+            <pre
+              v-if="promptStore.overallDetailedAnalysisMessagePart"
+              class="prompt-pre"
+            >{{ promptStore.overallDetailedAnalysisMessagePart }}</pre>
             <strong>Result:</strong><br>
             <div
               v-if="paperStore.loadingOverallAnalysis"
@@ -224,17 +235,28 @@ promptStore.fetchReviewMessagePart()
             </div>
             <p v-else-if="!paperStore.overallAnalysis">Please send a paper for overall analysis.</p>
             <div
-              v-else
+              v-if="paperStore.overallAnalysis"
               class="result-div"
               v-html="marked.parse(paperStore.overallAnalysis)"
             ></div>
+            <div v-if="paperStore.overallAnalysis">
+              {{ paperStore.overallAnalysis }}
+            </div>
           </div>
           <Button
-            @click="paperStore.getOverallAnalysis"
+            @click="paperStore.getOverallAnalysisGeneral"
             :disabled="paperStore.loading || !paperStore.content || !paperStore.paperType"
             class="p-mt-3"
           >
-            Perform Overall Analysis
+            Perform General Overall Analysis
+          </Button>
+          &nbsp;
+          <Button
+            @click="paperStore.getOverallAnalysisDetailed"
+            :disabled="paperStore.loading || !paperStore.content || !paperStore.paperType"
+            class="p-mt-3"
+          >
+            Perform Detailed Overall Analysis
           </Button>
         </template>
       </Card>
