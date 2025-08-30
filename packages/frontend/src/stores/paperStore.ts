@@ -23,6 +23,11 @@ export const usePaperStore = defineStore('paper', () => {
   const reviewError = ref<unknown | null>(null)
   const loadingReview = ref(false)
 
+  // ASE Review
+  const aseReview = ref('')
+  const aseReviewError = ref<unknown | null>(null)
+  const loadingAseReview = ref(false)
+
   const sectionAnalysisError = ref<unknown | null>(null)
   const loadingSectionAnalysis = ref(false)
 
@@ -70,10 +75,12 @@ export const usePaperStore = defineStore('paper', () => {
     content.value = "x"
   }
 
+  /* currently unused thus commented out
   function _reset() {
     _resetCalcs()
     _resetUserSettings()
   }
+   */
 
   function _resetCalcs() {
     file.value = null
@@ -186,6 +193,29 @@ export const usePaperStore = defineStore('paper', () => {
     review.value = data
   }
 
+  async function getAseReview() {
+    if (!file.value) return
+
+    loadingAseReview.value = true
+    try {
+      const { data, error } = await api.ase.post({
+        file: file.value,
+        apiKey: apiKey.value || "",
+        model: model.value,
+        kind: paperType.value,
+        hasPageLimit: hasPageLimit.value,
+        pageLimit: pageLimit.value + '',
+        currentPages: currentPages.value + '',
+      })
+      if (error) throw error
+      aseReview.value = data ?? ''
+      aseReviewError.value = null
+    } catch (error) {
+      aseReviewError.value = error
+    }
+    loadingAseReview.value = false
+  }
+
   async function enrichWithSectionAnalysis(sectionTitle: string) {
     if (!file.value || !sectionTitle || !paperType.value) return
 
@@ -216,6 +246,7 @@ export const usePaperStore = defineStore('paper', () => {
       loadingSections.value ||
       loadingOverallAnalysis.value ||
       loadingReview.value ||
+      loadingAseReview.value ||
       loadingSectionAnalysis.value
     )
   })
@@ -230,6 +261,7 @@ export const usePaperStore = defineStore('paper', () => {
     sections,
     overallAnalysis,
     review,
+    aseReview,
     wip,
     paperType,
     hasPageLimit,
@@ -246,6 +278,7 @@ export const usePaperStore = defineStore('paper', () => {
     loadingSections,
     loadingOverallAnalysis,
     loadingReview,
+    loadingAseReview,
     loadingSectionAnalysis,
 
     // Methods
@@ -254,12 +287,14 @@ export const usePaperStore = defineStore('paper', () => {
     getOverallAnalysisGeneral,
     getOverallAnalysisDetailed,
     getReview,
+    getAseReview,
     enrichWithSectionAnalysis,
 
     // Errors
     sectionsError,
     overallAnalysisError,
     reviewError,
+    aseReviewError,
     sectionAnalysisError,
 
   }

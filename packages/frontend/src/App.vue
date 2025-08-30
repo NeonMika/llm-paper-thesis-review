@@ -299,6 +299,43 @@ promptStore.fetchReviewMessagePart()
 
       <Card class="card">
         <template #title>
+          <h2>ASE Paper Review (Automated Software Engineering)</h2>
+        </template>
+        <template #content>
+          <div>
+            <strong>System Prompt:</strong><br />
+            <pre v-if="promptStore.aseSystemPrompt" class="prompt-pre">{{ promptStore.aseSystemPrompt }}</pre>
+            <strong>Message Part:</strong><br />
+            <pre v-if="promptStore.aseMessagePart" class="prompt-pre">{{ promptStore.aseMessagePart }}</pre>
+            <strong>Result:</strong><br />
+            <div
+              v-if="paperStore.loadingAseReview"
+              class="p-d-flex p-jc-center p-ai-center"
+              style="height: 150px"
+            >
+              <ProgressSpinner />
+            </div>
+            <p v-else-if="!paperStore.aseReview">Bitte Paper für ASE-Review senden.</p>
+            <div v-else class="result-div">
+              <pre>{{ paperStore.aseReview }}</pre>
+            </div>
+            <div v-if="paperStore.aseReviewError" class="p-error">
+              <h2>ASE Review Error</h2>
+              <pre>{{ JSON.stringify(paperStore.aseReviewError, null, 2) }}</pre>
+            </div>
+          </div>
+          <Button
+            @click="paperStore.getAseReview"
+            :disabled="paperStore.loading || !paperStore.content"
+            class="p-mt-3"
+          >
+            ASE Review durchführen
+          </Button>
+        </template>
+      </Card>
+
+      <Card class="card">
+        <template #title>
           <h2>Section Titles</h2>
         </template>
         <template #content>

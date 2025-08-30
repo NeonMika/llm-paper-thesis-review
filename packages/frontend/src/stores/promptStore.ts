@@ -25,6 +25,11 @@ export const usePromptStore = defineStore('promptStore', () => {
   const sectionAnalysisMessagePartError = ref<unknown | null>(null)
   const sectionsSystemPromptError = ref<unknown | null>(null)
 
+  const aseSystemPrompt = ref('')
+  const aseMessagePart = ref('')
+  const aseSystemPromptError = ref<unknown | null>(null)
+  const aseMessagePartError = ref<unknown | null>(null)
+
   const paperStore = usePaperStore()
   const {
     file,
@@ -215,6 +220,32 @@ export const usePromptStore = defineStore('promptStore', () => {
     }
   }
 
+  async function fetchAseSystemPrompt() {
+    try {
+      const { data, error } = await api.ase_system_prompt.post?.() ?? { data: '', error: 'Not implemented' }
+      if (error) throw error
+      aseSystemPrompt.value = data
+      aseSystemPromptError.value = null
+    } catch (err) {
+      aseSystemPromptError.value = err
+    }
+  }
+
+  async function fetchAseMessagePart() {
+    if (!file.value) {
+      aseMessagePartError.value = `fetchAseMessagePart: file muss gesetzt sein. file: ${!!file.value}`
+      return
+    }
+    try {
+      const { data, error } = await api.ase_message_part?.post?.({ file: file.value }) ?? { data: '', error: 'Not implemented' }
+      if (error) throw error
+      aseMessagePart.value = data
+      aseMessagePartError.value = null
+    } catch (err) {
+      aseMessagePartError.value = err
+    }
+  }
+
   // Automatisches Laden der Prompts & Message Parts, wenn alle nötigen Werte gesetzt sind
   watch([file, paperType, wip, hasPageLimit, pageLimit, currentPages], async () => {
     await fetchOverallAnalysisSystemPrompt()
@@ -222,6 +253,8 @@ export const usePromptStore = defineStore('promptStore', () => {
     await fetchOverallAnalysisDetailedMessagePart()
     await fetchReviewSystemPrompt()
     await fetchReviewMessagePart()
+    await fetchAseSystemPrompt()
+    await fetchAseMessagePart()
   }, { immediate: true })
 
   // Für alle Sections Prompts/MessageParts laden
@@ -247,6 +280,8 @@ export const usePromptStore = defineStore('promptStore', () => {
     sectionAnalysisSystemPrompt,
     sectionAnalysisMessagePart,
     sectionsSystemPrompt,
+    aseSystemPrompt,
+    aseMessagePart,
 
     // Fehler (separat für jede Fetch-Funktion)
     overallAnalysisSystemPromptError,
@@ -257,6 +292,8 @@ export const usePromptStore = defineStore('promptStore', () => {
     sectionAnalysisSystemPromptError,
     sectionAnalysisMessagePartError,
     sectionsSystemPromptError,
+    aseSystemPromptError,
+    aseMessagePartError,
 
     // Methoden
     fetchOverallAnalysisSystemPrompt,
@@ -267,5 +304,7 @@ export const usePromptStore = defineStore('promptStore', () => {
     fetchSectionAnalysisSystemPrompt,
     fetchSectionAnalysisMessagePart,
     fetchSectionsSystemPrompt,
+    fetchAseSystemPrompt,
+    fetchAseMessagePart,
   }
 })

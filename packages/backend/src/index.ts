@@ -302,7 +302,7 @@ Based on your detailed analysis, you must provide an overall recommendation scor
 --- +3 Strong accept, award quality - A top paper for the conference. It excels across all criteria.
 --- +2 Accept – A solid paper that clearly meets the bar for acceptance. It is sound, significant, and novel.
 --- +1 Weak accept – A borderline paper that has merit but also contains notable weaknesses. I will not fight for it, but I am okay with it being accepted.
---- -1 Weak reject – A borderline paper where the weaknesses slightly outweigh the strengths. I will not fight to reject it, but I lean towards rejection.
+--- -1 Weak reject - A borderline paper where the weaknesses slightly outweigh the strengths. I will not fight to reject it, but I lean towards rejection.
 --- -2 Reject – A paper with clear, significant flaws in one or more core criteria. It should not be accepted in its current form.
 --- -3 Strong Reject – A paper with fatal flaws (e.g., unsound methodology, incorrect claims, plagiarism) that falls far below the conference standard.
 
@@ -369,8 +369,85 @@ function getReviewMessagePart(body: ReviewBody): TextPart {
         type: 'text',
         text: `Analyze the provided ${body.kind}.
 ${body.hasPageLimit ? `The ${body.kind} has a page limit of ${body.pageLimit} pages, and currently has ${body.currentPages} pages.` : "The work does not have a page limit."}
-First, take notes for your review, then finally present the final review that should be sent to the authors.`
+Use the review criteria and output format from the system prompt.
+Present the final review that should be sent to the authors.
+Be specific, honest, and constructive.`
     }
+}
+
+function getAseSystemPrompt() {
+    return `# ROLE AND GOAL
+
+You are a world-class, seasoned reviewer for the IEEE/ACM International Conference on Automated Software Engineering (ASE), specifically for the Industry Showcase track.
+Your expertise spans automated software engineering, industrial practice, and the application of automation in real-world software systems.
+
+Be really honest, do not hold back critique if necessary. Your analyses, feedback and suggestions must be helpful, professional, and in a constructive tone. Your tone is critical but collegial, firm but fair. You act as a mentor, aiming to elevate the quality of industrial contributions in the field.
+
+Your primary goal is to provide a critical, insightful, and constructive review that serves two purposes:
+1.  **For the Program Committee:** To help them make a fair and informed decision about whether to accept the paper, with a clear recommendation and robust justification based on the provided criteria.
+2.  **For the Authors:** To provide clear, actionable feedback that helps them improve their current and future work, regardless of the acceptance decision. You are a mentor helping to elevate the quality of industrial science in the field.
+
+You must operate within the conference's guiding principles:
+- **Uphold Quality:** Champion technically sound, significant, and relevant industrial work.
+- **Provide Clarity:** Deliver clear, well-justified feedback, especially for rejections.
+- **Ensure Fairness:** Base your review strictly on the paper's content and the review criteria, avoiding personal bias.
+- **Be Professional:** Maintain a respectful, collegial, and constructive tone at all times.
+
+# CONTEXT
+ASE is the premier research forum for Automated Software Engineering, bringing together academia and industry to discuss foundations, techniques, and tools for automating the analysis, design, implementation, testing, and maintenance of large software systems.
+
+ASE welcomes submissions across the full spectrum of Automated Software Engineering, including but not limited to:
+- Requirements and Design
+- Testing and Analysis
+- Maintenance and Evolution
+- Human and Social Aspects
+- AI and Software Engineering
+- Software Analytics
+- Formal Aspects of Software Engineering
+- Security and Other Non-Functional Properties
+
+Industry Showcase submissions should prioritize impact and realistic applications over novelty. Focus is on automation, useful tools, success stories, experience reports, and practical challenges.
+
+# REVIEW CRITERIA
+Evaluate the paper according to the following criteria:
+- **Originality:** Does the paper advance the state of practice in its industrial context?
+- **Relevance to Industrial Application:** Is the relevance to industry clear and well described?
+- **Significance of Contributions:** How significant is the work compared to related works and similar industrial contexts?
+- **Generalizability and Scalability:** Are the results applicable beyond the specific context?
+- **Clarity:** Is the paper clearly written and well-structured?
+
+# OUTPUT FORMAT
+Use the following Markdown structure:
+
+### Summary
+[Brief summary of the paper and its industrial context.]
+
+### Strengths
+- [List major strengths, especially regarding industrial impact, automation, and practical relevance.]
+
+### Weaknesses
+- [List major weaknesses, e.g., lack of generalizability, unclear impact, insufficient evaluation, etc.]
+
+### Detailed Comments
+[Provide detailed, criterion-based comments. Reference the review criteria above.]
+
+### Suggestions for Improvement
+[List concrete, actionable suggestions for the authors.]
+
+### Overall Recommendation
+[Provide a clear recommendation (e.g., Strong Accept, Weak Accept, Borderline, Weak Reject, Strong Reject) and justify your decision based on the criteria above.]
+`;
+}
+
+function getAseMessagePart() : TextPart {
+    return {
+        type: 'text',
+        text: `Analyze the provided paper for the ASE 2025 Industry Showcase track.
+Focus on industrial relevance, impact, and practical application.
+Use the review criteria and output format from the system prompt.
+Present the final review that should be sent to the authors.
+Be specific, honest, and constructive.`
+    };
 }
 
 function getSectionAnalysisSystemPrompt(body: SectionAnalysisBody) {
@@ -565,6 +642,28 @@ const app = new Elysia({
         body: reviewBodySchema,
         response: t.String(),
     })
+    .post("/ase", async ({body}) => {
+        const result = await generateText({
+            model: google(body.apiKey)(getModelFromBody(body)),
+            system: getAseSystemPrompt(),
+            prompt: [
+                {
+                    role: 'user',
+                    content: [
+                        getAseMessagePart(),
+                        await createFileOrImageMessagePart(body.file)
+                    ]
+                }
+            ],
+            temperature: 0.7,
+        });
+        return result.text;
+    }, {
+        type: "multipart/form-data",
+        parse: 'multipart/form-data',
+        body: reviewBodySchema,
+        response: t.String(),
+    })
     .post("/sections", async ({body}) => {
         /*
         const { text } = await generateText({
@@ -716,6 +815,16 @@ const app = new Elysia({
     })
     .get("/sections_system_prompt", () => {
         return getSectionsSystemPrompt();
+    }, {
+        response: t.String(),
+    })
+    .post("/ase_system_prompt", () => {
+        return getAseSystemPrompt();
+    }, {
+        response: t.String(),
+    })
+    .post("/ase_message_part", () => {
+        return getAseMessagePart().text;
     }, {
         response: t.String(),
     })
