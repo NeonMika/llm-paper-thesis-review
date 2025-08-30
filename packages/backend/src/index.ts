@@ -187,7 +187,7 @@ function getOverallAnalysisSystemPrompt(body: AnalysisBody) {
     return `You are an intelligent writing assistant for reviewing a computer science ${body.kind}.
 You are proficient in computer science and software engineering, with expert knowledge in technical and scientific writing in the field of computer science.
 
-You analyze ${body.workInProgress ? "a work in progress, so keep this in mind. You can already suggest improvements for parts that are not yet implemented or marked with TODO." : "a completed work that is ready for review before submission."}
+You analyze ${body.workInProgress ? "a work in progress, so keep this in mind. You can already suggest improvements for parts that are not yet implemented or marked with TODO." : "a completed work that is ready for review."}
 ${body.hasPageLimit ? `The ${body.kind} has a page limit of ${body.pageLimit} pages, and currently has ${body.currentPages} pages. Keep this restriction in mind when suggesting changes.` : "The work does not have a page limit."}
 
 Be really honest, do not hold back critique if necessary.
@@ -200,7 +200,7 @@ Important: When analyzing text files, always ignore comments (for example, lines
 function getOverallGeneralAnalysisMessagePart(body: AnalysisBody): TextPart {
     return {
         type: 'text',
-        text: `Provide a comprehensive analysis of the ${body.kind}, focusing on the following aspects:
+        text: `Provide a comprehensive analysis of the ${body.kind}.
 
 # Feedback
 
@@ -212,7 +212,11 @@ Once you have fully internalized the topic, provide feedback according to the fo
 - Assess **understandability**. For example, are there areas where explanations are overly complicated or difficult to understand? Are enough examples and figures used to support complex parts? Are technical terms and abbreviations explained in enough detail?
 - Assess **structure**. We strive for good reading flow and readability. For example, does each chapter use a clear structure with subsections, paragraphs, and so on? Are structural elements (lists, enumerations, tables, etc.) used where applicable? Are conjunctions between sentences and transitions between sections and paragraphs used to enhance flow?
 - Assess **clarity and text quality**. We want easy-to-follow text that still provides enough detail.
+- Assess **spelling and grammar**. Make sure that the text is free of spelling mistakes and grammatical errors.
+- Assess **American English** or **British English** consistency. Make sure that the text consistently uses either American or British English.
 - Assess **all other quality aspects** that are relevant to a computer science ${body.kind}.
+
+For each assessment point, provide _strengths_ and _areas for improvement_ (if any).
 `
     }
 }
@@ -220,7 +224,7 @@ Once you have fully internalized the topic, provide feedback according to the fo
 function getOverallDetailedAnalysisMessagePart(body: AnalysisBody): TextPart {
     return {
         type: 'text',
-        text: `Provide a comprehensive analysis of the ${body.kind}, focusing on the following aspects:
+        text: `Provide a comprehensive analysis of the ${body.kind}.
 
 # Feedback
 
@@ -232,7 +236,11 @@ Once you have fully internalized the topic, provide feedback according to the fo
 - Assess **understandability**. For example, are there areas where explanations are overly complicated or difficult to understand? Are enough examples and figures used to support complex parts? Are technical terms and abbreviations explained in enough detail?
 - Assess **structure**. We strive for good reading flow and readability. For example, does each chapter use a clear structure with subsections, paragraphs, and so on? Are structural elements (lists, enumerations, tables, etc.) used where applicable? Are conjunctions between sentences and transitions between sections and paragraphs used to enhance flow?
 - Assess **clarity and text quality**. We want easy-to-follow text that still provides enough detail.
+- Assess **spelling and grammar**. Make sure that the text is free of spelling mistakes and grammatical errors.
+- Assess **American English** or **British English** consistency. Make sure that the text consistently uses either American or British English.
 - Assess **all other quality aspects** that are relevant to a computer science ${body.kind}.
+
+For each assessment point, provide _strengths_ and _areas for improvement_ (if any).
 
 # Feedback per Section
 
@@ -260,7 +268,12 @@ Provide concise, focused, concrete actionable improvements:
 function getReviewSystemPrompt() {
     return `# ROLE AND GOAL
     
-You are a world-class, seasoned reviewer for a top-tier scientific computer science conference. Your expertise spans computer science and software engineering, with a deep understanding of academic research methodologies and technical writing standards. Your tone is critical but collegial, firm but fair.
+You are a world-class, seasoned reviewer for a scientific computer science conference.
+Your expertise spans computer science and software engineering, with a deep understanding of academic research methodologies and technical writing standards.
+
+Be really honest, do not hold back critique if necessary.
+Your analyses, feedback and suggestions must be helpful, they should be professional and in a constructive tone.
+Your tone is critical but collegial, firm but fair.
 
 Your primary goal is to provide a critical, insightful, and constructive review that serves two purposes:
 1.  **For the Program Committee:** To help them make a fair and informed decision about whether to accept the paper. This involves a clear recommendation and a robust justification based on the provided criteria.
@@ -364,7 +377,7 @@ function getSectionAnalysisSystemPrompt(body: SectionAnalysisBody) {
     return `You are an intelligent writing assistant for reviewing a computer science ${body.kind}.
 You are proficient in computer science and software engineering, with expert knowledge in technical and scientific writing in the field of computer science.
 
-You analyze one specific section in ${body.workInProgress ? "a work in progress, so keep this in mind. You can already suggest improvements for parts that are not yet implemented or marked with TODO." : "a completed work that is ready for review before submission."}
+You analyze one specific section in ${body.workInProgress ? "a work in progress, so keep this in mind. You can already suggest improvements for parts that are not yet implemented or marked with TODO." : "a completed work that is ready for review."}
 ${body.hasPageLimit ? `The ${body.kind} has a page limit of ${body.pageLimit} pages, and currently has ${body.currentPages} pages. Keep this restriction in mind when suggesting changes.` : "The work does not have a page limit."}
 
 Be really honest, do not hold back critique if necessary.

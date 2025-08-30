@@ -18,7 +18,7 @@ function handleFileChange(event: Event) {
 
 const modelOptions = [
   { label: 'Gemini 2.5 Pro', value: 'pro' },
-  { label: 'Gemini 2.5 Flash', value: 'flash' }
+  { label: 'Gemini 2.5 Flash', value: 'flash' },
 ]
 
 // Prompts initial laden
@@ -30,7 +30,6 @@ promptStore.fetchReviewMessagePart()
 <template>
   <div class="p-grid p-justify-center">
     <div class="p-col-12 p-md-8">
-
       <!-- Google Gemini Settings Card -->
       <Card class="card">
         <template #title>
@@ -45,19 +44,19 @@ promptStore.fetchReviewMessagePart()
               v-model="paperStore.apiKey"
               placeholder="Optional: Own Google API Key"
               class="p-mb-3"
-              style="width: 100%;"
+              style="width: 100%"
               autocomplete="off"
             />
           </div>
-          <p v-if="!paperStore.apiKey"><em>API key provided by Markus will be used if no API key is provided. If rate limits hit, provide your own key.</em></p>
+          <p v-if="!paperStore.apiKey">
+            <em
+              >API key provided by Markus will be used if no API key is provided. If rate limits
+              hit, provide your own key.</em
+            >
+          </p>
           <div class="form-group">
             <label for="modelSelect">Modell</label>
-            <select
-              id="modelSelect"
-              v-model="paperStore.model"
-              class="p-mb-3"
-              style="width: 100%;"
-            >
+            <select id="modelSelect" v-model="paperStore.model" class="p-mb-3" style="width: 100%">
               <option value="" disabled>Modell wählen</option>
               <option v-for="option in modelOptions" :key="option.value" :value="option.value">
                 {{ option.label }}
@@ -95,7 +94,9 @@ promptStore.fetchReviewMessagePart()
       </div>
       <div v-if="promptStore.overallDetailedAnalysisMessagePartError" class="p-error">
         <h2>Overall Detailed Analysis Message Part Error</h2>
-        <pre>{{ JSON.stringify(promptStore.overallDetailedAnalysisMessagePartError, null, 2) }}</pre>
+        <pre>{{
+          JSON.stringify(promptStore.overallDetailedAnalysisMessagePartError, null, 2)
+        }}</pre>
       </div>
       <div v-if="promptStore.reviewSystemPromptError" class="p-error">
         <h2>Review System Prompt Error</h2>
@@ -139,12 +140,12 @@ promptStore.fetchReviewMessagePart()
 
             <div class="form-group">
               <label for="paperType">Paper Type: </label>
-              <select
-                id="paperType"
-                v-model="paperStore.paperType"
-                class="p-mb-3"
-              >
-                <option v-for="type in paperStore.paperTypes" :key="type.optionValue" :value="type.optionValue">
+              <select id="paperType" v-model="paperStore.paperType" class="p-mb-3">
+                <option
+                  v-for="type in paperStore.paperTypes"
+                  :key="type.optionValue"
+                  :value="type.optionValue"
+                >
                   {{ type.optionLabel }}
                 </option>
               </select>
@@ -210,22 +211,19 @@ promptStore.fetchReviewMessagePart()
         </template>
         <template #content>
           <div>
-            <strong>System Prompt:</strong><br>
-            <pre
-              v-if="promptStore.overallAnalysisSystemPrompt"
-              class="prompt-pre"
-            >{{ promptStore.overallAnalysisSystemPrompt }}</pre>
-            <strong>Message Part (General Analysis):</strong><br>
-            <pre
-              v-if="promptStore.overallGeneralAnalysisMessagePart"
-              class="prompt-pre"
-            >{{ promptStore.overallGeneralAnalysisMessagePart }}</pre>
-            <strong>Message Part (Detailed Analysis):</strong><br>
-            <pre
-              v-if="promptStore.overallDetailedAnalysisMessagePart"
-              class="prompt-pre"
-            >{{ promptStore.overallDetailedAnalysisMessagePart }}</pre>
-            <strong>Result:</strong><br>
+            <strong>System Prompt:</strong><br />
+            <pre v-if="promptStore.overallAnalysisSystemPrompt" class="prompt-pre">{{
+              promptStore.overallAnalysisSystemPrompt
+            }}</pre>
+            <strong>Message Part (General Analysis):</strong><br />
+            <pre v-if="promptStore.overallGeneralAnalysisMessagePart" class="prompt-pre">{{
+              promptStore.overallGeneralAnalysisMessagePart
+            }}</pre>
+            <strong>Message Part (Detailed Analysis):</strong><br />
+            <pre v-if="promptStore.overallDetailedAnalysisMessagePart" class="prompt-pre">{{
+              promptStore.overallDetailedAnalysisMessagePart
+            }}</pre>
+            <strong>Result:</strong><br />
             <div
               v-if="paperStore.loadingOverallAnalysis"
               class="p-d-flex p-jc-center p-ai-center"
@@ -239,9 +237,9 @@ promptStore.fetchReviewMessagePart()
               class="result-div"
               v-html="marked.parse(paperStore.overallAnalysis)"
             ></div>
-            <div v-if="paperStore.overallAnalysis">
+            <pre class="result-div" v-if="paperStore.overallAnalysis">
               {{ paperStore.overallAnalysis }}
-            </div>
+            </pre>
           </div>
           <Button
             @click="paperStore.getOverallAnalysisGeneral"
@@ -267,17 +265,15 @@ promptStore.fetchReviewMessagePart()
         </template>
         <template #content>
           <div>
-            <strong>System Prompt:</strong><br>
-            <pre
-              v-if="promptStore.reviewSystemPrompt"
-              class="prompt-pre"
-            >{{ promptStore.reviewSystemPrompt }}</pre>
-            <strong>Message Part:</strong><br>
-            <pre
-              v-if="promptStore.reviewMessagePart"
-              class="prompt-pre"
-            >{{ promptStore.reviewMessagePart }}</pre>
-            <strong>Result:</strong><br>
+            <strong>System Prompt:</strong><br />
+            <pre v-if="promptStore.reviewSystemPrompt" class="prompt-pre">{{
+              promptStore.reviewSystemPrompt
+            }}</pre>
+            <strong>Message Part:</strong><br />
+            <pre v-if="promptStore.reviewMessagePart" class="prompt-pre">{{
+              promptStore.reviewMessagePart
+            }}</pre>
+            <strong>Result:</strong><br />
             <div
               v-if="paperStore.loadingReview"
               class="p-d-flex p-jc-center p-ai-center"
@@ -286,11 +282,10 @@ promptStore.fetchReviewMessagePart()
               <ProgressSpinner />
             </div>
             <p v-else-if="!paperStore.review">Please send a paper for review.</p>
-            <div
-              v-else
-              class="result-div"
-              v-html="marked.parse(paperStore.review)"
-            ></div>
+            <div v-else class="result-div" v-html="marked.parse(paperStore.review)"></div>
+            <pre class="result-div" v-if="paperStore.review">
+              {{ paperStore.review }}
+            </pre>
           </div>
           <Button
             @click="paperStore.getReview"
@@ -308,12 +303,11 @@ promptStore.fetchReviewMessagePart()
         </template>
         <template #content>
           <div>
-            <strong>System Prompt:</strong><br>
-            <pre
-              v-if="promptStore.sectionsSystemPrompt"
-              class="prompt-pre"
-            >{{ promptStore.sectionsSystemPrompt }}</pre>
-            <strong>Result:</strong><br>
+            <strong>System Prompt:</strong><br />
+            <pre v-if="promptStore.sectionsSystemPrompt" class="prompt-pre">{{
+              promptStore.sectionsSystemPrompt
+            }}</pre>
+            <strong>Result:</strong><br />
             <div
               v-if="paperStore.loadingSections"
               class="p-d-flex p-jc-center p-ai-center"
@@ -330,17 +324,19 @@ promptStore.fetchReviewMessagePart()
                 <Card class="card p-mb-2 p-mt-2">
                   <template #content>
                     <div>
-                      <strong>System Prompt:</strong><br>
+                      <strong>System Prompt:</strong><br />
                       <pre
                         v-if="promptStore.sectionAnalysisSystemPrompt[section.title]"
                         class="prompt-pre"
-                      >{{ promptStore.sectionAnalysisSystemPrompt[section.title] }}</pre>
-                      <strong>Message Part:</strong><br>
+                        >{{ promptStore.sectionAnalysisSystemPrompt[section.title] }}</pre
+                      >
+                      <strong>Message Part:</strong><br />
                       <pre
                         v-if="promptStore.sectionAnalysisMessagePart[section.title]"
                         class="prompt-pre"
-                      >{{ promptStore.sectionAnalysisMessagePart[section.title] }}</pre>
-                      <strong>Result:</strong><br>
+                        >{{ promptStore.sectionAnalysisMessagePart[section.title] }}</pre
+                      >
+                      <strong>Result:</strong><br />
                       <div
                         v-if="paperStore.loadingSectionAnalysis"
                         class="p-d-flex p-jc-center p-ai-center"
@@ -351,12 +347,15 @@ promptStore.fetchReviewMessagePart()
                       <div
                         v-else
                         class="result-div"
-                        v-html="section.analysis ? marked.parse(section.analysis): ''"
+                        v-html="section.analysis ? marked.parse(section.analysis) : ''"
                       ></div>
+                      <pre class="result-div" v-if="section.analysis">
+                        {{ section.analysis }}
+                      </pre>
                       <Button
                         @click="paperStore.enrichWithSectionAnalysis(section.title)"
                         :disabled="paperStore.loading"
-                      >Perform Section Analysis
+                        >Perform Section Analysis
                       </Button>
                     </div>
                   </template>
@@ -469,7 +468,8 @@ form > * {
   box-shadow: 0 1px 4px 0 rgba(56, 142, 60, 0.07);
 }
 
-h1, h2 {
+h1,
+h2 {
   color: #1565c0;
   letter-spacing: 0.02em;
   margin-bottom: 0.5em;
@@ -506,12 +506,12 @@ strong {
   margin-bottom: 1em;
 }
 
-input[type="checkbox"] {
+input[type='checkbox'] {
   accent-color: #26a69a;
   margin-right: 0.5em;
 }
 
-input[type="number"] {
+input[type='number'] {
   border: 1px solid #b2ebf2;
   border-radius: 6px;
   padding: 0.3em 0.7em;
@@ -544,10 +544,13 @@ li {
   font-size: 1.08em;
   padding: 0.6em 1.5em;
   box-shadow: 0 2px 8px 0 rgba(33, 150, 243, 0.08);
-  transition: background 0.2s, box-shadow 0.2s;
+  transition:
+    background 0.2s,
+    box-shadow 0.2s;
 }
 
-.p-button:hover, .p-button:focus {
+.p-button:hover,
+.p-button:focus {
   background: linear-gradient(90deg, #1976d2 0%, #26a69a 100%);
   color: #fff;
   box-shadow: 0 4px 16px 0 rgba(33, 150, 243, 0.13);
@@ -585,7 +588,8 @@ li {
   color: #fff;
 }
 
-.p-fileupload .p-button:hover, .p-fileupload .p-button:focus {
+.p-fileupload .p-button:hover,
+.p-fileupload .p-button:focus {
   background: linear-gradient(90deg, #1976d2 0%, #26a69a 100%);
   color: #fff;
 }
