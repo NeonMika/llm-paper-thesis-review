@@ -7,8 +7,8 @@ import {generateObject, generateText} from 'ai';
 import {createGoogleGenerativeAI} from '@ai-sdk/google';
 import {z} from 'zod';
 
-const pro = 'gemini-2.5-pro'
-const flash = 'gemini-2.5-flash'
+const pro = 'gemini-3-pro-preview'
+const flash = 'gemini-3-flash-preview'
 
 function google(apiKey: string | null | undefined) {
     return createGoogleGenerativeAI({
@@ -30,9 +30,6 @@ const reviewBodySchema = t.Object({
     apiKey: t.Optional(t.String()),
     model: t.Union([t.Literal("pro"), t.Literal("flash")]),
     file: t.File(),
-    hasPageLimit: t.Optional(t.BooleanString()),
-    pageLimit: t.Optional(t.String()), // since requests with files are sent with multipart/form-data, we use string here
-    currentPages: t.Optional(t.String()),  // since requests with files are sent with multipart/form-data, we use string here
     kind: t.Union([
         t.Literal("short conference paper"),
         t.Literal("full conference paper"),
@@ -40,7 +37,9 @@ const reviewBodySchema = t.Object({
         t.Literal("bachelor thesis"),
         t.Literal("master thesis"),
         t.Literal("university seminar paper")
-    ])
+    ]),
+    customSystemPrompt: t.Optional(t.String()),
+    customMessagePart: t.Optional(t.String())
 })
 
 type ReviewBody = typeof reviewBodySchema.static
@@ -60,7 +59,9 @@ const analysisBodySchema = t.Object({
         t.Literal("bachelor thesis"),
         t.Literal("master thesis"),
         t.Literal("university seminar paper")
-    ])
+    ]),
+    customSystemPrompt: t.Optional(t.String()),
+    customMessagePart: t.Optional(t.String())
 })
 
 type AnalysisBody = typeof analysisBodySchema.static
@@ -81,7 +82,9 @@ const sectionAnalysisBodySchema = t.Object({
         t.Literal("bachelor thesis"),
         t.Literal("master thesis"),
         t.Literal("university seminar paper")
-    ])
+    ]),
+    customSystemPrompt: t.Optional(t.String()),
+    customMessagePart: t.Optional(t.String())
 });
 
 type SectionAnalysisBody = typeof sectionAnalysisBodySchema.static;
@@ -368,7 +371,6 @@ function getReviewMessagePart(body: ReviewBody): TextPart {
     return {
         type: 'text',
         text: `Analyze the provided ${body.kind}.
-${body.hasPageLimit ? `The ${body.kind} has a page limit of ${body.pageLimit} pages, and currently has ${body.currentPages} pages.` : "The work does not have a page limit."}
 Use the review criteria and output format from the system prompt.
 Present the final review that should be sent to the authors.
 Be specific, honest, and constructive.`
@@ -503,6 +505,18 @@ function getSectionsSystemPrompt() {
     return "Your are given a document that is split into sections. Extract the section titles. Also include sections that do not have a number (e.g., Abstract)";
 }
 
+// Treat common placeholder values as absent so fallbacks work reliably
+function normalizePrompt(value: any): string | undefined {
+    if (value === undefined || value === null) return undefined;
+    // If it's a non-string, leave it (rare)
+    if (typeof value !== 'string') return value;
+    const s = value.trim();
+    if (s.length === 0) return undefined;
+    const lower = s.toLowerCase();
+    if (lower === 'undefined' || lower === 'null') return undefined;
+    return value;
+}
+
 // Hilfsfunktion für Literal-Typen
 function parseKind(kind: string | undefined): "short conference paper" | "full conference paper" | "journal paper" | "bachelor thesis" | "master thesis" | "university seminar paper" {
     if (
@@ -524,6 +538,181 @@ function getModelFromBody(body: { model?: "pro" | "flash" }) {
     return flash;
 }
 
+// Detailed logging helpers
+function maskApiKey(key: string | undefined | null) {
+    if (!key) return '(from env)';
+    try {
+        const s = String(key);
+        if (s.length <= 8) return '****';
+        return s.slice(0, 4) + '...' + s.slice(-4);
+    } catch (e) {
+        return '****';
+    }
+}
+
+function truncate(s: string | undefined | null, max = 1000) {
+    if (s === undefined || s === null) return String(s);
+    const str = String(s);
+    return str.length > max ? str.slice(0, max) + '...[truncated]' : str;
+}
+
+function safeStringify(obj: any, max = 2000) {
+    try {
+        const s = JSON.stringify(obj, null, 2);
+        return s.length > max ? s.slice(0, max) + '...[truncated]' : s;
+    } catch (e) {
+        try {
+            return String(obj);
+        } catch (e2) {
+            return '[unstringifiable]';
+        }
+    }
+}
+
+function logBeforeLLM(route: string, body: any, callMeta: { modelId: string, systemPrompt?: string, promptSummary?: string }) {
+    const fileInfo = body?.file ? `fileName=${body.file?.name} fileType=${body.file?.type || 'unknown'} ` : '';
+    console.log(`\n[LLM CALL START] route=${route}`);
+    console.log(`Received: apiKey=${maskApiKey(body?.apiKey)} model=${body?.model} kind=${body?.kind} workInProgress=${body?.workInProgress} hasPageLimit=${body?.hasPageLimit} ${fileInfo}`);
+    console.log(`LLM details: modelId=${callMeta.modelId}`);
+    if (callMeta.systemPrompt) console.log(`System prompt (truncated):\n${truncate(callMeta.systemPrompt, 2000)}`);
+    if (callMeta.promptSummary) console.log(`Prompt summary (truncated):\n${truncate(callMeta.promptSummary, 2000)}`);
+}
+
+// Make this async so we can read response bodies if necessary
+async function logAfterLLM(route: string, result: any) {
+    console.log(`[LLM CALL END] route=${route}`);
+    try {
+        // shallow summary of the result
+        console.log(`Model result (truncated):\n${safeStringify(result, 8000)}`);
+        if (result?.text) console.log(`Result.text (truncated, len=${String(result.text).length}):\n${truncate(result.text, 8000)}`);
+        if (result?.object) console.log(`Result.object (truncated):\n${safeStringify(result.object, 8000)}`);
+
+        // Log request metadata if available, but sanitize headers
+        if (result?.request) {
+            try {
+                const req = result.request as any;
+                const sanitizedReq: any = {};
+                if (req.method) sanitizedReq.method = req.method;
+                if (req.url) sanitizedReq.url = req.url;
+                if (req.headers) {
+                    const headers: any = {};
+                    // headers may be Headers, map, or object
+                    if (typeof req.headers.get === 'function') {
+                        // common Headers-like
+                        try {
+                            // iterate a few likely header names
+                            const names = ['content-type', 'authorization', 'user-agent', 'content-length'];
+                            names.forEach(n => {
+                                const v = req.headers.get(n);
+                                if (v) headers[n] = n.toLowerCase() === 'authorization' ? '[REDACTED]' : v;
+                            })
+                        } catch (e) { }
+                    } else if (typeof req.headers === 'object') {
+                        Object.entries(req.headers).forEach(([k, v]) => {
+                            const key = String(k).toLowerCase();
+                            headers[key] = key === 'authorization' || key.includes('api') || key.includes('key') ? '[REDACTED]' : v;
+                        })
+                    }
+                    sanitizedReq.headers = headers;
+                }
+                if (req.body) {
+                    try {
+                        sanitizedReq.body = truncate(typeof req.body === 'string' ? req.body : safeStringify(req.body, 2000), 2000);
+                    } catch (e) {
+                        sanitizedReq.body = '[unreadable]';
+                    }
+                }
+                console.log(`Request summary (sanitized):\n${safeStringify(sanitizedReq, 4000)}`);
+            } catch (e) {
+                console.log('[LLM CALL] Could not extract request metadata', e);
+            }
+        }
+
+        // Log response metadata if available
+        if (result?.response) {
+            try {
+                const rawResp = result.response as any;
+                const respSummary: any = {};
+                if (rawResp.status) respSummary.status = rawResp.status;
+                if (rawResp.statusText) respSummary.statusText = rawResp.statusText;
+
+                // Headers
+                if (rawResp.headers) {
+                    const headersOut: any = {};
+                    if (typeof rawResp.headers.get === 'function') {
+                        // try to read common headers
+                        ['content-type', 'content-length', 'date'].forEach(h => {
+                            try {
+                                const v = rawResp.headers.get(h);
+                                if (v) headersOut[h] = v;
+                            } catch (e) { }
+                        })
+                    } else if (typeof rawResp.headers === 'object') {
+                        Object.entries(rawResp.headers).forEach(([k, v]) => headersOut[String(k).toLowerCase()] = v);
+                    }
+                    respSummary.headers = headersOut;
+                }
+
+                // Body: if it's a fetch Response-like, try to read text
+                if (typeof rawResp.text === 'function') {
+                    try {
+                        const bodyText = await rawResp.text();
+                        respSummary.body = truncate(bodyText, 8000);
+                    } catch (e) {
+                        respSummary.body = '[unreadable body]';
+                    }
+                } else if (rawResp.body) {
+                    try {
+                        // body might be a stream or string
+                        if (typeof rawResp.body.getReader === 'function') {
+                            respSummary.body = '[stream]';
+                        } else if (typeof rawResp.body === 'string') {
+                            respSummary.body = truncate(rawResp.body, 8000);
+                        } else {
+                            respSummary.body = safeStringify(rawResp.body, 8000);
+                        }
+                    } catch (e) {
+                        respSummary.body = '[unreadable body]';
+                    }
+                }
+
+                console.log(`Response summary (truncated):\n${safeStringify(respSummary, 10000)}`);
+            } catch (e) {
+                console.log('[LLM CALL] Could not extract response metadata', e);
+            }
+        }
+
+        // Provider metadata often includes provider-specific raw info
+        if (result?.providerMetadata) {
+            try {
+                // sanitize potential nested headers
+                const meta = JSON.parse(JSON.stringify(result.providerMetadata));
+                // Walk through meta and redact obvious secrets in headers
+                function redact(obj: any) {
+                    if (!obj || typeof obj !== 'object') return obj;
+                    Object.keys(obj).forEach(k => {
+                        try {
+                            const v = obj[k];
+                            if (typeof v === 'string' && (k.toLowerCase().includes('authorization') || k.toLowerCase().includes('api') || k.toLowerCase().includes('key'))) {
+                                obj[k] = '[REDACTED]';
+                            } else if (v && typeof v === 'object') {
+                                redact(v);
+                            }
+                        } catch (e) { }
+                    })
+                }
+                redact(meta);
+                console.log(`Provider metadata (sanitized, truncated):\n${safeStringify(meta, 10000)}`);
+            } catch (e) {
+                console.log('[LLM CALL] Could not stringify providerMetadata', e);
+            }
+        }
+
+    } catch (e) {
+        console.log('[LLM CALL END] Could not stringify result', e);
+    }
+}
+
 const app = new Elysia({
     serve: {
         // Increase idle timeout to 30 seconds
@@ -543,20 +732,31 @@ const app = new Elysia({
         }
     })
     .post("/overall_analysis_general", async ({body}) => {
+        const route = '/overall_analysis_general';
+        const modelId = getModelFromBody(body);
+        const customSys = normalizePrompt(body.customSystemPrompt);
+        const systemPrompt = customSys ?? getOverallAnalysisSystemPrompt(body);
+        const customMsg = normalizePrompt(body.customMessagePart);
+        const promptSummary = customMsg ?? getOverallGeneralAnalysisMessagePart(body).text;
+
+        logBeforeLLM(route, body, { modelId, systemPrompt, promptSummary });
+
         const result = await generateText({
-            model: google(body.apiKey)(getModelFromBody(body)),
-            system: getOverallAnalysisSystemPrompt(body),
+            model: google(body.apiKey)(modelId),
+            system: systemPrompt,
             prompt: [
                 {
                     role: 'user',
                     content: [
-                        getOverallGeneralAnalysisMessagePart(body),
+                        customMsg ? { type: 'text', text: customMsg } : getOverallGeneralAnalysisMessagePart(body),
                         await createFileOrImageMessagePart(body.file)
                     ]
                 }
             ],
             temperature: 0.7,
         });
+
+        await logAfterLLM(route, result);
 
         console.timeLog("Overall analysis result:", JSON.stringify(result, null, 2));
 
@@ -568,20 +768,31 @@ const app = new Elysia({
         response: t.String(),
     })
     .post("/overall_analysis_detailed", async ({body}) => {
+        const route = '/overall_analysis_detailed';
+        const modelId = getModelFromBody(body);
+        const customSys = normalizePrompt(body.customSystemPrompt);
+        const systemPrompt = customSys ?? getOverallAnalysisSystemPrompt(body);
+        const customMsg = normalizePrompt(body.customMessagePart);
+        const promptSummary = customMsg ?? getOverallDetailedAnalysisMessagePart(body).text;
+
+        logBeforeLLM(route, body, { modelId, systemPrompt, promptSummary });
+
         const result = await generateText({
-            model: google(body.apiKey)(getModelFromBody(body)),
-            system: getOverallAnalysisSystemPrompt(body),
+            model: google(body.apiKey)(modelId),
+            system: systemPrompt,
             prompt: [
                 {
                     role: 'user',
                     content: [
-                        getOverallDetailedAnalysisMessagePart(body),
+                        customMsg ? { type: 'text', text: customMsg } : getOverallDetailedAnalysisMessagePart(body),
                         await createFileOrImageMessagePart(body.file)
                     ]
                 }
             ],
             temperature: 0.7,
         });
+
+        await logAfterLLM(route, result);
 
         console.timeLog("Overall analysis result:", JSON.stringify(result, null, 2));
 
@@ -593,20 +804,31 @@ const app = new Elysia({
         response: t.String(),
     })
     .post("/section_analysis", async ({body}) => {
+        const route = '/section_analysis';
+        const modelId = getModelFromBody(body);
+        const customSys = normalizePrompt(body.customSystemPrompt);
+        const systemPrompt = customSys ?? getSectionAnalysisSystemPrompt(body);
+        const customMsg = normalizePrompt(body.customMessagePart);
+        const promptSummary = customMsg ?? getSectionAnalysisMessagePart(body).text;
+
+        logBeforeLLM(route, body, { modelId, systemPrompt, promptSummary });
+
         const result = await generateText({
-            model: google(body.apiKey)(getModelFromBody(body)),
-            system: getSectionAnalysisSystemPrompt(body),
+            model: google(body.apiKey)(modelId),
+            system: systemPrompt,
             prompt: [
                 {
                     role: 'user',
                     content: [
-                        getSectionAnalysisMessagePart(body),
+                        customMsg ? { type: 'text', text: customMsg } : getSectionAnalysisMessagePart(body),
                         await createFileOrImageMessagePart(body.file)
                     ]
                 }
             ],
             temperature: 0.7,
         });
+
+        await logAfterLLM(route, result);
 
         console.timeLog("Section analysis result:", JSON.stringify(result, null, 2));
 
@@ -618,20 +840,31 @@ const app = new Elysia({
         response: t.String(),
     })
     .post("/review", async ({body}) => {
+        const route = '/review';
+        const modelId = getModelFromBody(body);
+        const customSys = normalizePrompt(body.customSystemPrompt);
+        const systemPrompt = customSys ?? getReviewSystemPrompt();
+        const customMsg = normalizePrompt(body.customMessagePart);
+        const promptSummary = customMsg ?? getReviewMessagePart(body).text;
+
+        logBeforeLLM(route, body, { modelId, systemPrompt, promptSummary });
+
         const result = await generateText({
-            model: google(body.apiKey)(getModelFromBody(body)),
-            system: getReviewSystemPrompt(),
+            model: google(body.apiKey)(modelId),
+            system: systemPrompt,
             prompt: [
                 {
                     role: 'user',
                     content: [
-                        getReviewMessagePart(body),
+                        customMsg ? { type: 'text', text: customMsg } : getReviewMessagePart(body),
                         await createFileOrImageMessagePart(body.file)
                     ]
                 }
             ],
             temperature: 0.7,
         });
+
+        await logAfterLLM(route, result);
 
         console.timeLog("Review result:", JSON.stringify(result, null, 2));
 
@@ -643,20 +876,32 @@ const app = new Elysia({
         response: t.String(),
     })
     .post("/ase", async ({body}) => {
+        const route = '/ase';
+        const modelId = getModelFromBody(body);
+        const customSys = normalizePrompt(body.customSystemPrompt);
+        const systemPrompt = customSys ?? getAseSystemPrompt();
+        const customMsg = normalizePrompt(body.customMessagePart);
+        const promptSummary = customMsg ?? getAseMessagePart().text;
+
+        logBeforeLLM(route, body, { modelId, systemPrompt, promptSummary });
+
         const result = await generateText({
-            model: google(body.apiKey)(getModelFromBody(body)),
-            system: getAseSystemPrompt(),
+            model: google(body.apiKey)(modelId),
+            system: systemPrompt,
             prompt: [
                 {
                     role: 'user',
                     content: [
-                        getAseMessagePart(),
+                        customMsg ? { type: 'text', text: customMsg } : getAseMessagePart(),
                         await createFileOrImageMessagePart(body.file)
                     ]
                 }
             ],
             temperature: 0.7,
         });
+
+        await logAfterLLM(route, result);
+
         return result.text;
     }, {
         type: "multipart/form-data",
@@ -665,86 +910,18 @@ const app = new Elysia({
         response: t.String(),
     })
     .post("/sections", async ({body}) => {
-        /*
-        const { text } = await generateText({
-          model: 'openai/gpt-4.1',
-          system:
-            'You are a professional writer. ' +
-            'You write simple, clear, and concise content.',
-          prompt: `Summarize the following article in 3-5 sentences: ${article}`,
-        });
+        const route = '/sections';
+        const modelId = getModelFromBody(body);
+        const systemPrompt = getSectionsSystemPrompt();
 
-        The result object of generateText contains several promises that resolve when all required data is available:
-
-        result.content: The content that was generated in the last step.
-        result.text: The generated text.
-        result.reasoning: The full reasoning that the model has generated in the last step.
-        result.reasoningText: The reasoning text of the model (only available for some models).
-        result.files: The files that were generated in the last step.
-        result.sources: Sources that have been used as references in the last step (only available for some models).
-        result.toolCalls: The tool calls that were made in the last step.
-        result.toolResults: The results of the tool calls from the last step.
-        result.finishReason: The reason the model finished generating text.
-        result.usage: The usage of the model during the final step of text generation.
-        result.totalUsage: The total usage across all steps (for multi-step generations).
-        result.warnings: Warnings from the model provider (e.g. unsupported settings).
-        result.request: Additional request information.
-        result.response: Additional response information, including response messages and body.
-        result.providerMetadata: Additional provider-specific metadata.
-        result.steps: Details for all steps, useful for getting information about intermediate steps.
-        result.experimental_output: The generated structured output using the experimental_output specification.
-        */
-        /*
-
-        streamText:
-
-        const result = streamText({
-          model: 'openai/gpt-4.1',
-          prompt: 'Invent a new holiday and describe its traditions.',
-        });
-
-        // example: use textStream as an async iterable
-        // result.textStream is both a ReadableStream and an AsyncIterable.
-        for await (const textPart of result.textStream) {
-          console.log(textPart);
-        }
-
-        result.toTextStreamResponse(): Creates a simple text stream HTTP response.
-        result.pipeTextStreamToResponse(): Writes text delta output to a Node.js response-like object.
-
-        It also provides several promises that resolve when the stream is finished:
-
-        result.content: The content that was generated in the last step.
-        result.text: The generated text.
-        result.reasoning: The full reasoning that the model has generated.
-        result.reasoningText: The reasoning text of the model (only available for some models).
-        result.files: Files that have been generated by the model in the last step.
-        result.sources: Sources that have been used as references in the last step (only available for some models).
-        result.toolCalls: The tool calls that have been executed in the last step.
-        result.toolResults: The tool results that have been generated in the last step.
-        result.finishReason: The reason the model finished generating text.
-        result.usage: The usage of the model during the final step of text generation.
-        result.totalUsage: The total usage across all steps (for multi-step generations).
-        result.warnings: Warnings from the model provider (e.g. unsupported settings).
-        result.steps: Details for all steps, useful for getting information about intermediate steps.
-        result.request: Additional request information from the last step.
-        result.response: Additional response information from the last step.
-        result.providerMetadata: Additional provider-specific metadata from the last step.
-
-        */
-        /*
-        generateObject:
-
-        You can access the raw response headers and body using the response property.
-
-        */
+        logBeforeLLM(route, body, { modelId, systemPrompt, promptSummary: 'extract section titles using schema: SectionTitles' });
 
         const result = await generateObject({
-            model: google(body.apiKey)(getModelFromBody(body)),
+            model: google(body.apiKey)(modelId),
             schemaName: "SectionTitles",
             schemaDescription: "A list of sections extracted from a document, including optional information about numbering and sub(sub)sections.",
             schema: z.array(zSectionSchema),
-            system: "Your are given a document that is split into sections. Extract the section titles. Also include sections that do not have a number (e.g., Abstract)",
+            system: systemPrompt,
             // We can either use messages or prompt, but not both.
             // Since prompt also accepts ModelMessage[], we just always use prompt.
             prompt: [
@@ -757,6 +934,10 @@ const app = new Elysia({
                 }
             ],
         })
+
+        await logAfterLLM(route, result);
+
+        result.object
 
         console.timeLog("Sections result:", JSON.stringify(result, null, 2));
 
@@ -827,6 +1008,58 @@ const app = new Elysia({
         return getAseMessagePart().text;
     }, {
         response: t.String(),
+    })
+    .post("/prompt/analysis/combined", ({body}) => {
+        return {
+            systemPrompt: getOverallAnalysisSystemPrompt(body),
+            messagePart: getOverallGeneralAnalysisMessagePart(body).text
+        };
+    }, {
+        parse: 'multipart/form-data',
+        body: analysisBodySchema,
+        response: t.Object({
+            systemPrompt: t.String(),
+            messagePart: t.String()
+        }),
+    })
+    .post("/prompt/analysis-detailed/combined", ({body}) => {
+        return {
+            systemPrompt: getOverallAnalysisSystemPrompt(body),
+            messagePart: getOverallDetailedAnalysisMessagePart(body).text
+        };
+    }, {
+        parse: 'multipart/form-data',
+        body: analysisBodySchema,
+        response: t.Object({
+            systemPrompt: t.String(),
+            messagePart: t.String()
+        }),
+    })
+    .post("/prompt/review/combined", ({body}) => {
+        return {
+            systemPrompt: getReviewSystemPrompt(),
+            messagePart: getReviewMessagePart(body).text
+        };
+    }, {
+        parse: 'multipart/form-data',
+        body: reviewBodySchema,
+        response: t.Object({
+            systemPrompt: t.String(),
+            messagePart: t.String()
+        }),
+    })
+    .post("/prompt/ase-review/combined", ({body}) => {
+        return {
+            systemPrompt: getAseSystemPrompt(),
+            messagePart: getAseMessagePart().text
+        };
+    }, {
+        parse: 'multipart/form-data',
+        body: reviewBodySchema,
+        response: t.Object({
+            systemPrompt: t.String(),
+            messagePart: t.String()
+        }),
     })
     .listen(3000);
 

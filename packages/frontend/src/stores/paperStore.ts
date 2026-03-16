@@ -4,6 +4,17 @@ import { defineStore } from 'pinia'
 import api from '../api'
 import type { Section } from '../../../backend/src'
 
+export interface Review {
+  id: string
+  type: string
+  systemPrompt: string
+  messagePart: string
+  result: string
+  timestamp: Date
+  fileName: string
+  fileContentPreview: string
+}
+
 export const usePaperStore = defineStore('paper', () => {
   const file = ref<File | null>(null)
 
@@ -14,19 +25,6 @@ export const usePaperStore = defineStore('paper', () => {
   const sections: Ref<SectionWithAnalysis[]> = ref([])
   const sectionsError = ref<unknown | null>(null)
   const loadingSections = ref(false)
-
-  const overallAnalysis = ref('')
-  const overallAnalysisError = ref<unknown | null>(null)
-  const loadingOverallAnalysis = ref(false)
-
-  const review = ref('')
-  const reviewError = ref<unknown | null>(null)
-  const loadingReview = ref(false)
-
-  // ASE Review
-  const aseReview = ref('')
-  const aseReviewError = ref<unknown | null>(null)
-  const loadingAseReview = ref(false)
 
   const sectionAnalysisError = ref<unknown | null>(null)
   const loadingSectionAnalysis = ref(false)
@@ -52,59 +50,145 @@ export const usePaperStore = defineStore('paper', () => {
   const apiKey = ref<string>('');
   const model = ref<'pro' | 'flash'>('flash');
 
-  // Input: a file from <input type="file">
-  function readPaperFromFile(readFile: File | null) {
+  // Centralized list of text file extensions (previewable/readable as text)
+  const TEXT_FILE_EXTENSIONS = [
+    '.txt', '.tex', '.md', '.html', '.css', '.js', '.ts',
+    '.py', '.java', '.c', '.cpp', '.h', '.hpp'
+  ]
+
+  function getFileExtension(fileName: string): string {
+    const idx = fileName.lastIndexOf('.')
+    return idx >= 0 ? fileName.substring(idx) : ''
+  }
+
+  function isTextFileName(fileName: string): boolean {
+    const lower = fileName.toLowerCase()
+    return TEXT_FILE_EXTENSIONS.some(ext => lower.endsWith(ext))
+  }
+
+  // Reviews management
+  const reviews: Ref<Review[]> = ref([])
+  const REVIEWS_STORAGE_KEY = 'llm-paper-reviews'
+
+  // Load reviews from localStorage on initialization
+  function loadReviewsFromStorage() {
+    try {
+      const stored = localStorage.getItem(REVIEWS_STORAGE_KEY)
+      if (stored) {
+        const parsed = JSON.parse(stored)
+        // Convert timestamp strings back to Date objects
+        reviews.value = parsed.map((r: Review) => ({
+          ...r,
+          timestamp: new Date(r.timestamp)
+        }))
+      }
+    } catch (error) {
+      console.error('Failed to load reviews from localStorage:', error)
+      reviews.value = []
+    }
+  }
+
+  // Save reviews to localStorage
+  function saveReviewsToStorage() {
+    try {
+      localStorage.setItem(REVIEWS_STORAGE_KEY, JSON.stringify(reviews.value))
+    } catch (error) {
+      console.error('Failed to save reviews to localStorage:', error)
+    }
+  }
+
+  // Helper to extract file preview (first 50 lines for text; message for non-text)
+  async function extractFilePreview(file: File): Promise<string> {
+    const name = file.name
+    const ext = getFileExtension(name)
+    const isText = isTextFileName(name)
+
+    if (!isText) {
+      return ext
+        ? `Text preview not available for ${ext} file`
+        : 'Text preview not available for this file'
+    }
+
+    try {
+      const text = await file.text()
+      const lines = text.split('\n')
+      const preview = lines.slice(0, 50).join('\n')
+      return preview + (lines.length > 50 ? '\n... (truncated)' : '')
+    } catch (error) {
+      console.error('Failed to read file content:', error)
+      return 'Text preview could not be loaded'
+    }
+  }
+
+  // Add a new review
+  async function addReview(
+    type: string,
+    systemPrompt: string,
+    messagePart: string,
+    result: string
+  ) {
+    const fileContentPreview = file.value ? await extractFilePreview(file.value) : ''
+
+    const review: Review = {
+      id: crypto.randomUUID(),
+      type,
+      systemPrompt,
+      messagePart,
+      result,
+      timestamp: new Date(),
+      fileName: file.value?.name || 'Unknown file',
+      fileContentPreview
+    }
+
+    // Add to beginning (newest first)
+    reviews.value.unshift(review)
+    saveReviewsToStorage()
+  }
+
+  // Delete a specific review
+  function deleteReview(id: string) {
+    reviews.value = reviews.value.filter(r => r.id !== id)
+    saveReviewsToStorage()
+  }
+
+  // Clear all reviews
+  function clearAllReviews() {
+    reviews.value = []
+    saveReviewsToStorage()
+  }
+
+  // Initialize reviews from storage
+  loadReviewsFromStorage()
+
+
+  // Input: a file from <input type="file">; only load text content for text files
+  async function readPaperFromFile(readFile: File | null) {
     if (!readFile) return
 
-    /*
-    const reader = new FileReader()
-    reader.onload = (event) => {
-      if (event.target?.result) {
-        _resetCalcs()
-        file.value = readFile
-        content.value = event.target.result as string
-      }
-    }
-    loadingContent.value = true
-
-     reader.readAsText(readFile)
-
-     */
-
     file.value = readFile
-    content.value = "x"
-  }
+    const name = readFile.name
+    const ext = getFileExtension(name)
+    const isText = isTextFileName(name)
 
-  /* currently unused thus commented out
-  function _reset() {
-    _resetCalcs()
-    _resetUserSettings()
-  }
-   */
+    if (!isText) {
+      // Do not attempt to read non-text files (e.g., PDFs); show a helpful message instead
+      content.value = ext
+        ? `Text preview not available for ${ext} file`
+        : 'Text preview not available for this file'
+      loadingContent.value = false
+      return
+    }
 
-  function _resetCalcs() {
-    file.value = null
-    content.value = ''
-    sections.value = []
-    overallAnalysis.value = ''
-    review.value = ''
-    sectionsError.value = null
-    overallAnalysisError.value = null
-    reviewError.value = null
-    sectionAnalysisError.value = null
-    loadingContent.value = false
-    loadingSections.value = false
-    loadingOverallAnalysis.value = false
-    loadingReview.value = false
-    loadingSectionAnalysis.value = false
-  }
-
-  function _resetUserSettings() {
-    wip.value = false
-    paperType.value = 'full conference paper'
-    hasPageLimit.value = false
-    pageLimit.value = 0
-    currentPages.value = 0
+    try {
+      loadingContent.value = true
+      const text = await readFile.text()
+      content.value = text
+    } catch (error) {
+      console.error('Failed to read file content:', error)
+      content.value = 'Text preview could not be loaded'
+    } finally {
+      loadingContent.value = false
+    }
   }
 
   async function getSectionTitles() {
@@ -125,95 +209,83 @@ export const usePaperStore = defineStore('paper', () => {
     sections.value = data
   }
 
-  async function getOverallAnalysisGeneral() {
-    if (!file.value || !paperType.value) return
+  async function sendReviewRequest(
+    type: 'analysis' | 'analysis-detailed' | 'review' | 'ase-review',
+    customSystemPrompt?: string,
+    customMessagePart?: string
+  ): Promise<string> {
+    if (!file.value) throw new Error('File must be selected')
 
-    loadingOverallAnalysis.value = true
-    const { data, error } = await api.overall_analysis_general.post({
+    // Build request bodies conditionally to avoid sending the literal string "undefined"
+    const analysisRequestBody: any = {
       file: file.value,
+      apiKey: apiKey.value || "",
+      model: model.value,
       kind: paperType.value,
       workInProgress: wip.value,
       hasPageLimit: hasPageLimit.value,
       pageLimit: pageLimit.value + '',
-      currentPages: currentPages.value + '',
-      apiKey: apiKey.value || "",
-      model: model.value,
-    })
-    loadingOverallAnalysis.value = false
-    if (error) {
-      overallAnalysisError.value = error
-      throw error
+      currentPages: currentPages.value + ''
     }
 
-    overallAnalysis.value = data
-  }
-
-  async function getOverallAnalysisDetailed() {
-    if (!file.value || !paperType.value) return
-
-    loadingOverallAnalysis.value = true
-    const { data, error } = await api.overall_analysis_detailed.post({
-      file: file.value,
-      kind: paperType.value,
-      workInProgress: wip.value,
-      hasPageLimit: hasPageLimit.value,
-      pageLimit: pageLimit.value + '',
-      currentPages: currentPages.value + '',
-      apiKey: apiKey.value || "",
-      model: model.value,
-    })
-    loadingOverallAnalysis.value = false
-    if (error) {
-      overallAnalysisError.value = error
-      throw error
+    if (customSystemPrompt !== undefined && customSystemPrompt !== null && String(customSystemPrompt).trim() !== '') {
+      analysisRequestBody.customSystemPrompt = customSystemPrompt
+    }
+    if (customMessagePart !== undefined && customMessagePart !== null && String(customMessagePart).trim() !== '') {
+      analysisRequestBody.customMessagePart = customMessagePart
     }
 
-    overallAnalysis.value = data
-  }
-
-  async function getReview() {
-    if (!file.value) return
-
-    loadingReview.value = true
-    const { data, error } = await api.review.post({
+    const reviewRequestBody: any = {
       file: file.value,
       apiKey: apiKey.value || "",
       model: model.value,
       kind: paperType.value,
-      hasPageLimit: hasPageLimit.value,
-      pageLimit: pageLimit.value + '',
-      currentPages: currentPages.value + '',
-    })
-    loadingReview.value = false
-    if (error) {
-      reviewError.value = error
-      throw error
     }
 
-    review.value = data
-  }
+    if (customSystemPrompt !== undefined && customSystemPrompt !== null && String(customSystemPrompt).trim() !== '') {
+      reviewRequestBody.customSystemPrompt = customSystemPrompt
+    }
+    if (customMessagePart !== undefined && customMessagePart !== null && String(customMessagePart).trim() !== '') {
+      reviewRequestBody.customMessagePart = customMessagePart
+    }
 
-  async function getAseReview() {
-    if (!file.value) return
-
-    loadingAseReview.value = true
     try {
-      const { data, error } = await api.ase.post({
-        file: file.value,
-        apiKey: apiKey.value || "",
-        model: model.value,
-        kind: paperType.value,
-        hasPageLimit: hasPageLimit.value,
-        pageLimit: pageLimit.value + '',
-        currentPages: currentPages.value + '',
-      })
-      if (error) throw error
-      aseReview.value = data ?? ''
-      aseReviewError.value = null
+      let result = ''
+      switch (type) {
+        case 'analysis':
+          {
+            const { data, error } = await api.overall_analysis_general.post(analysisRequestBody)
+            if (error) throw error
+            result = data
+          }
+          break
+        case 'analysis-detailed':
+          {
+            const { data, error } = await api.overall_analysis_detailed.post(analysisRequestBody)
+            if (error) throw error
+            result = data
+          }
+          break
+        case 'review':
+          {
+            const { data, error } = await api.review.post(reviewRequestBody)
+            if (error) throw error
+            result = data
+          }
+          break
+        case 'ase-review':
+          {
+            const { data, error } = await api.ase.post(reviewRequestBody)
+            if (error) throw error
+            result = data
+          }
+          break
+      }
+      return result
     } catch (error) {
-      aseReviewError.value = error
+      // Error is propagated to caller
+      throw error
     }
-    loadingAseReview.value = false
   }
 
   async function enrichWithSectionAnalysis(sectionTitle: string) {
@@ -244,9 +316,6 @@ export const usePaperStore = defineStore('paper', () => {
     return (
       loadingContent.value ||
       loadingSections.value ||
-      loadingOverallAnalysis.value ||
-      loadingReview.value ||
-      loadingAseReview.value ||
       loadingSectionAnalysis.value
     )
   })
@@ -259,9 +328,6 @@ export const usePaperStore = defineStore('paper', () => {
     file,
     content,
     sections,
-    overallAnalysis,
-    review,
-    aseReview,
     wip,
     paperType,
     hasPageLimit,
@@ -272,29 +338,26 @@ export const usePaperStore = defineStore('paper', () => {
     apiKey,
     model,
 
+    // Reviews
+    reviews,
+
     // Loading indicators
     loading,
     loadingContent,
     loadingSections,
-    loadingOverallAnalysis,
-    loadingReview,
-    loadingAseReview,
     loadingSectionAnalysis,
 
     // Methods
     readPaperFromFile,
     getSectionTitles,
-    getOverallAnalysisGeneral,
-    getOverallAnalysisDetailed,
-    getReview,
-    getAseReview,
+    sendReviewRequest,
     enrichWithSectionAnalysis,
+    addReview,
+    deleteReview,
+    clearAllReviews,
 
     // Errors
     sectionsError,
-    overallAnalysisError,
-    reviewError,
-    aseReviewError,
     sectionAnalysisError,
 
   }

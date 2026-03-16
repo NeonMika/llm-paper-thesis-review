@@ -37,11 +37,11 @@
 @keyframes dot-opacity {
   0%,
   100% {
-    background-color: white;
+    background-color: #3b82f6;
   }
   50% {
     /*opacity: 1;*/
-    background-color: black;
+    background-color: #60a5fa;
   }
 }
 </style>

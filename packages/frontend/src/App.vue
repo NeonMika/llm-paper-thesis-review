@@ -1,13 +1,17 @@
 <script setup lang="ts">
+import { onMounted, onBeforeUnmount, ref } from 'vue'
 import { usePaperStore } from './stores/paperStore.ts'
 import { usePromptStore } from './stores/promptStore'
 import { marked } from 'marked'
 import Button from 'primevue/button'
 import Card from 'primevue/card'
 import ProgressSpinner from 'primevue/progressspinner'
+import ReviewPromptEditor from './components/ReviewPromptEditor.vue'
+import ReviewResultsList from './components/ReviewResultsList.vue'
 
 const paperStore = usePaperStore()
 const promptStore = usePromptStore()
+const fileInput = ref<HTMLInputElement | null>(null)
 
 function handleFileChange(event: Event) {
   const input = event.target as HTMLInputElement
@@ -16,20 +20,51 @@ function handleFileChange(event: Event) {
   }
 }
 
+function clearFile() {
+  if (fileInput.value) {
+    fileInput.value.value = ''
+  }
+  paperStore.file = null
+}
+
 const modelOptions = [
-  { label: 'Gemini 2.5 Pro', value: 'pro' },
-  { label: 'Gemini 2.5 Flash', value: 'flash' },
+  { label: 'Gemini 3 Pro Preview', value: 'pro' },
+  { label: 'Gemini 3 Flash Preview', value: 'flash' },
 ]
 
-// Prompts initial laden
+// Initialize sections system prompt
 promptStore.fetchSectionsSystemPrompt()
-promptStore.fetchReviewSystemPrompt()
-promptStore.fetchReviewMessagePart()
+
+// Warn before leaving page if there are unsaved changes
+function handleBeforeUnload(event: BeforeUnloadEvent) {
+  if (promptStore.isDirty) {
+    event.preventDefault()
+    event.returnValue = ''
+  }
+}
+
+onMounted(() => {
+  window.addEventListener('beforeunload', handleBeforeUnload)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('beforeunload', handleBeforeUnload)
+})
+
+// Helper function to detect validation hint messages vs true errors
+function isValidationHint(error: unknown): boolean {
+  if (!error) return false
+  const errorString = typeof error === 'string' ? error : JSON.stringify(error)
+  return errorString.includes('müssen gesetzt sein') || errorString.includes('must be set')
+}
 </script>
 
 <template>
   <div class="p-grid p-justify-center">
     <div class="p-col-12 p-md-8">
+
+      <h1>Paper & Thesis Review Tool</h1>
+
       <!-- Google Gemini Settings Card -->
       <Card class="card">
         <template #title>
@@ -38,25 +73,16 @@ promptStore.fetchReviewMessagePart()
         <template #content>
           <div class="form-group">
             <label for="apiKey">API Key</label>
-            <input
-              id="apiKey"
-              type="text"
-              v-model="paperStore.apiKey"
-              placeholder="Optional: Own Google API Key"
-              class="p-mb-3"
-              style="width: 100%"
-              autocomplete="off"
-            />
+            <input id="apiKey" type="text" v-model="paperStore.apiKey" placeholder="Optional: Own Google API Key" class="p-mb-3" style="width: 100%"
+              autocomplete="off" />
           </div>
           <p v-if="!paperStore.apiKey">
-            <em
-              >API key provided by Markus will be used if no API key is provided. If rate limits
-              hit, provide your own key.</em
-            >
+            <em>API key provided by Markus will be used if no API key is provided. If rate limits
+              hit, provide your own key.</em>
           </p>
           <div class="form-group">
             <label for="modelSelect">Modell</label>
-            <select id="modelSelect" v-model="paperStore.model" class="p-mb-3" style="width: 100%">
+            <select id="modelSelect" v-model="paperStore.model" class="form-select">
               <option value="" disabled>Modell wählen</option>
               <option v-for="option in modelOptions" :key="option.value" :value="option.value">
                 {{ option.label }}
@@ -66,62 +92,9 @@ promptStore.fetchReviewMessagePart()
         </template>
       </Card>
 
-      <!-- Fehleranzeigen für alle Fehler aus paperStore und promptStore -->
-      <div v-if="paperStore.sectionsError" class="p-error">
-        <h2>Sections Error</h2>
-        <pre>{{ JSON.stringify(paperStore.sectionsError, null, 2) }}</pre>
-      </div>
-      <div v-if="paperStore.overallAnalysisError" class="p-error">
-        <h2>Overall Analysis Error</h2>
-        <pre>{{ JSON.stringify(paperStore.overallAnalysisError, null, 2) }}</pre>
-      </div>
-      <div v-if="paperStore.reviewError" class="p-error">
-        <h2>Review Error</h2>
-        <pre>{{ JSON.stringify(paperStore.reviewError, null, 2) }}</pre>
-      </div>
-      <div v-if="paperStore.sectionAnalysisError" class="p-error">
-        <h2>Section Analysis Error</h2>
-        <pre>{{ JSON.stringify(paperStore.sectionAnalysisError, null, 2) }}</pre>
-      </div>
-
-      <div v-if="promptStore.overallAnalysisSystemPromptError" class="p-error">
-        <h2>Overall Analysis System Prompt Error</h2>
-        <pre>{{ JSON.stringify(promptStore.overallAnalysisSystemPromptError, null, 2) }}</pre>
-      </div>
-      <div v-if="promptStore.overallGeneralAnalysisMessagePartError" class="p-error">
-        <h2>Overall General Analysis Message Part Error</h2>
-        <pre>{{ JSON.stringify(promptStore.overallGeneralAnalysisMessagePartError, null, 2) }}</pre>
-      </div>
-      <div v-if="promptStore.overallDetailedAnalysisMessagePartError" class="p-error">
-        <h2>Overall Detailed Analysis Message Part Error</h2>
-        <pre>{{
-          JSON.stringify(promptStore.overallDetailedAnalysisMessagePartError, null, 2)
-        }}</pre>
-      </div>
-      <div v-if="promptStore.reviewSystemPromptError" class="p-error">
-        <h2>Review System Prompt Error</h2>
-        <pre>{{ JSON.stringify(promptStore.reviewSystemPromptError, null, 2) }}</pre>
-      </div>
-      <div v-if="promptStore.reviewMessagePartError" class="p-error">
-        <h2>Review Message Part Error</h2>
-        <pre>{{ JSON.stringify(promptStore.reviewMessagePartError, null, 2) }}</pre>
-      </div>
-      <div v-if="promptStore.sectionAnalysisSystemPromptError" class="p-error">
-        <h2>Section Analysis System Prompt Error</h2>
-        <pre>{{ JSON.stringify(promptStore.sectionAnalysisSystemPromptError, null, 2) }}</pre>
-      </div>
-      <div v-if="promptStore.sectionAnalysisMessagePartError" class="p-error">
-        <h2>Section Analysis Message Part Error</h2>
-        <pre>{{ JSON.stringify(promptStore.sectionAnalysisMessagePartError, null, 2) }}</pre>
-      </div>
-      <div v-if="promptStore.sectionsSystemPromptError" class="p-error">
-        <h2>Sections System Prompt Error</h2>
-        <pre>{{ JSON.stringify(promptStore.sectionsSystemPromptError, null, 2) }}</pre>
-      </div>
-
       <Card class="card">
         <template #title>
-          <h1>Paper Analyzer</h1>
+          <h2>Settings</h2>
         </template>
         <template #content>
           <p>
@@ -130,22 +103,26 @@ promptStore.fetchReviewMessagePart()
           </p>
 
           <form>
-            <input
-              type="file"
-              name="paper"
-              @change="handleFileChange"
-              :disabled="paperStore.loading"
-              class="p-mb-3"
-            />
+            <!-- File Upload Area -->
+            <label for="paper" class="file-upload-container">
+              <input ref="fileInput" type="file" id="paper" name="paper" @change="handleFileChange" :disabled="paperStore.loading" class="file-input-hidden" />
+              <div class="file-upload-area">
+                <div class="upload-icon">📤</div>
+                <div class="upload-text">
+                  <strong>Click to select or drag-and-drop your paper</strong>
+                  <span class="upload-hint">(PDF, DOCX, TXT, or other formats)</span>
+                </div>
+              </div>
+              <div v-if="paperStore.file" class="file-display">
+                <span class="file-name">📄 {{ paperStore.file.name }}</span>
+                <button type="button" @click.stop="clearFile" class="clear-button" title="Clear file">✕</button>
+              </div>
+            </label>
 
             <div class="form-group">
               <label for="paperType">Paper Type: </label>
-              <select id="paperType" v-model="paperStore.paperType" class="p-mb-3">
-                <option
-                  v-for="type in paperStore.paperTypes"
-                  :key="type.optionValue"
-                  :value="type.optionValue"
-                >
+              <select id="paperType" v-model="paperStore.paperType" class="form-select">
+                <option v-for="type in paperStore.paperTypes" :key="type.optionValue" :value="type.optionValue">
                   {{ type.optionLabel }}
                 </option>
               </select>
@@ -163,176 +140,56 @@ promptStore.fetchReviewMessagePart()
 
             <div v-if="paperStore.hasPageLimit" class="form-group">
               <label for="pageLimit">Page Limit (# of pages)</label>
-              <input
-                type="number"
-                id="pageLimit"
-                v-model.number="paperStore.pageLimit"
-                step="0.5"
-                min="0"
-              />
+              <input type="number" id="pageLimit" v-model.number="paperStore.pageLimit" step="0.5" min="0" />
             </div>
 
             <div v-if="paperStore.hasPageLimit" class="form-group">
               <label for="currentPages">Current # of pages</label>
-              <input
-                type="number"
-                id="currentPages"
-                v-model.number="paperStore.currentPages"
-                step="0.5"
-                min="0"
-              />
+              <input type="number" id="currentPages" v-model.number="paperStore.currentPages" step="0.5" min="0" />
             </div>
           </form>
-        </template>
-      </Card>
 
-      <Card class="card">
-        <template #title>
-          <h2>Paper Text</h2>
-        </template>
-        <template #content>
-          <div
-            v-if="paperStore.loadingContent"
-            class="p-d-flex p-jc-center p-ai-center"
-            style="height: 150px"
-          >
+          <!-- Error displays -->
+          <div v-if="paperStore.sectionsError" class="p-error">
+            <h2>Sections Error</h2>
+            <pre>{{ JSON.stringify(paperStore.sectionsError, null, 2) }}</pre>
+          </div>
+          <div v-if="paperStore.sectionAnalysisError" class="p-error">
+            <h2>Section Analysis Error</h2>
+            <pre>{{ JSON.stringify(paperStore.sectionAnalysisError, null, 2) }}</pre>
+          </div>
+          <div v-if="promptStore.sectionAnalysisSystemPromptError"
+            :class="isValidationHint(promptStore.sectionAnalysisSystemPromptError) ? 'p-hint' : 'p-error'">
+            <h2>Section Analysis System Prompt Error</h2>
+            <pre>{{ JSON.stringify(promptStore.sectionAnalysisSystemPromptError, null, 2) }}</pre>
+          </div>
+          <div v-if="promptStore.sectionAnalysisMessagePartError" :class="isValidationHint(promptStore.sectionAnalysisMessagePartError) ? 'p-hint' : 'p-error'">
+            <h2>Section Analysis Message Part Error</h2>
+            <pre>{{ JSON.stringify(promptStore.sectionAnalysisMessagePartError, null, 2) }}</pre>
+          </div>
+          <div v-if="promptStore.sectionsSystemPromptError" :class="isValidationHint(promptStore.sectionsSystemPromptError) ? 'p-hint' : 'p-error'">
+            <h2>Sections System Prompt Error</h2>
+            <pre>{{ JSON.stringify(promptStore.sectionsSystemPromptError, null, 2) }}</pre>
+          </div>
+
+
+          <h3>Paper Text</h3>
+
+          <div v-if="paperStore.loadingContent" class="p-d-flex p-jc-center p-ai-center" style="height: 150px">
             <ProgressSpinner />
           </div>
           <p v-else-if="!paperStore.content">Load a paper for analysis.</p>
-          <pre v-else id="paper-content">
-            {{ paperStore.content }}
-          </pre>
+          <pre v-else id="paper-content">{{ paperStore.content }}</pre>
+
+
         </template>
       </Card>
 
-      <Card class="card">
-        <template #title>
-          <h2>Paper Analysis</h2>
-        </template>
-        <template #content>
-          <div>
-            <strong>System Prompt:</strong><br />
-            <pre v-if="promptStore.overallAnalysisSystemPrompt" class="prompt-pre">{{
-              promptStore.overallAnalysisSystemPrompt
-            }}</pre>
-            <strong>Message Part (General Analysis):</strong><br />
-            <pre v-if="promptStore.overallGeneralAnalysisMessagePart" class="prompt-pre">{{
-              promptStore.overallGeneralAnalysisMessagePart
-            }}</pre>
-            <strong>Message Part (Detailed Analysis):</strong><br />
-            <pre v-if="promptStore.overallDetailedAnalysisMessagePart" class="prompt-pre">{{
-              promptStore.overallDetailedAnalysisMessagePart
-            }}</pre>
-            <strong>Result:</strong><br />
-            <div
-              v-if="paperStore.loadingOverallAnalysis"
-              class="p-d-flex p-jc-center p-ai-center"
-              style="height: 150px"
-            >
-              <ProgressSpinner />
-            </div>
-            <p v-else-if="!paperStore.overallAnalysis">Please send a paper for overall analysis.</p>
-            <div
-              v-if="paperStore.overallAnalysis"
-              class="result-div"
-              v-html="marked.parse(paperStore.overallAnalysis)"
-            ></div>
-            <pre class="result-div" v-if="paperStore.overallAnalysis">
-              {{ paperStore.overallAnalysis }}
-            </pre>
-          </div>
-          <Button
-            @click="paperStore.getOverallAnalysisGeneral"
-            :disabled="paperStore.loading || !paperStore.content || !paperStore.paperType"
-            class="p-mt-3"
-          >
-            Perform General Overall Analysis
-          </Button>
-          &nbsp;
-          <Button
-            @click="paperStore.getOverallAnalysisDetailed"
-            :disabled="paperStore.loading || !paperStore.content || !paperStore.paperType"
-            class="p-mt-3"
-          >
-            Perform Detailed Overall Analysis
-          </Button>
-        </template>
-      </Card>
+      <!-- Review Prompt Editor -->
+      <ReviewPromptEditor />
 
-      <Card class="card">
-        <template #title>
-          <h2>Paper Review</h2>
-        </template>
-        <template #content>
-          <div>
-            <strong>System Prompt:</strong><br />
-            <pre v-if="promptStore.reviewSystemPrompt" class="prompt-pre">{{
-              promptStore.reviewSystemPrompt
-            }}</pre>
-            <strong>Message Part:</strong><br />
-            <pre v-if="promptStore.reviewMessagePart" class="prompt-pre">{{
-              promptStore.reviewMessagePart
-            }}</pre>
-            <strong>Result:</strong><br />
-            <div
-              v-if="paperStore.loadingReview"
-              class="p-d-flex p-jc-center p-ai-center"
-              style="height: 150px"
-            >
-              <ProgressSpinner />
-            </div>
-            <p v-else-if="!paperStore.review">Please send a paper for review.</p>
-            <div v-else class="result-div" v-html="marked.parse(paperStore.review)"></div>
-            <pre class="result-div" v-if="paperStore.review">
-              {{ paperStore.review }}
-            </pre>
-          </div>
-          <Button
-            @click="paperStore.getReview"
-            :disabled="paperStore.loading || !paperStore.content || !paperStore.paperType"
-            class="p-mt-3"
-          >
-            Perform Paper Review
-          </Button>
-        </template>
-      </Card>
-
-      <Card class="card">
-        <template #title>
-          <h2>ASE Paper Review (Automated Software Engineering)</h2>
-        </template>
-        <template #content>
-          <div>
-            <strong>System Prompt:</strong><br />
-            <pre v-if="promptStore.aseSystemPrompt" class="prompt-pre">{{ promptStore.aseSystemPrompt }}</pre>
-            <strong>Message Part:</strong><br />
-            <pre v-if="promptStore.aseMessagePart" class="prompt-pre">{{ promptStore.aseMessagePart }}</pre>
-            <strong>Result:</strong><br />
-            <div
-              v-if="paperStore.loadingAseReview"
-              class="p-d-flex p-jc-center p-ai-center"
-              style="height: 150px"
-            >
-              <ProgressSpinner />
-            </div>
-            <p v-else-if="!paperStore.aseReview">Bitte Paper für ASE-Review senden.</p>
-            <div v-else class="result-div">
-              <pre>{{ paperStore.aseReview }}</pre>
-            </div>
-            <div v-if="paperStore.aseReviewError" class="p-error">
-              <h2>ASE Review Error</h2>
-              <pre>{{ JSON.stringify(paperStore.aseReviewError, null, 2) }}</pre>
-            </div>
-          </div>
-          <Button
-            @click="paperStore.getAseReview"
-            :disabled="paperStore.loading || !paperStore.content"
-            class="p-mt-3"
-          >
-            ASE Review durchführen
-          </Button>
-        </template>
-      </Card>
+      <!-- Review Results List -->
+      <ReviewResultsList />
 
       <Card class="card">
         <template #title>
@@ -341,15 +198,9 @@ promptStore.fetchReviewMessagePart()
         <template #content>
           <div>
             <strong>System Prompt:</strong><br />
-            <pre v-if="promptStore.sectionsSystemPrompt" class="prompt-pre">{{
-              promptStore.sectionsSystemPrompt
-            }}</pre>
+            <pre v-if="promptStore.sectionsSystemPrompt" class="prompt-pre">{{ promptStore.sectionsSystemPrompt }}</pre>
             <strong>Result:</strong><br />
-            <div
-              v-if="paperStore.loadingSections"
-              class="p-d-flex p-jc-center p-ai-center"
-              style="height: 150px"
-            >
+            <div v-if="paperStore.loadingSections" class="p-d-flex p-jc-center p-ai-center" style="height: 150px">
               <ProgressSpinner />
             </div>
             <p v-else-if="paperStore.sections.length === 0">
@@ -362,37 +213,18 @@ promptStore.fetchReviewMessagePart()
                   <template #content>
                     <div>
                       <strong>System Prompt:</strong><br />
-                      <pre
-                        v-if="promptStore.sectionAnalysisSystemPrompt[section.title]"
-                        class="prompt-pre"
-                        >{{ promptStore.sectionAnalysisSystemPrompt[section.title] }}</pre
-                      >
+                      <pre v-if="promptStore.sectionAnalysisSystemPrompt[section.title]"
+                        class="prompt-pre">{{ promptStore.sectionAnalysisSystemPrompt[section.title] }}</pre>
                       <strong>Message Part:</strong><br />
-                      <pre
-                        v-if="promptStore.sectionAnalysisMessagePart[section.title]"
-                        class="prompt-pre"
-                        >{{ promptStore.sectionAnalysisMessagePart[section.title] }}</pre
-                      >
+                      <pre v-if="promptStore.sectionAnalysisMessagePart[section.title]"
+                        class="prompt-pre">{{ promptStore.sectionAnalysisMessagePart[section.title] }}</pre>
                       <strong>Result:</strong><br />
-                      <div
-                        v-if="paperStore.loadingSectionAnalysis"
-                        class="p-d-flex p-jc-center p-ai-center"
-                        style="height: 150px"
-                      >
+                      <div v-if="paperStore.loadingSectionAnalysis" class="p-d-flex p-jc-center p-ai-center" style="height: 150px">
                         <ProgressSpinner />
                       </div>
-                      <div
-                        v-else
-                        class="result-div"
-                        v-html="section.analysis ? marked.parse(section.analysis) : ''"
-                      ></div>
-                      <pre class="result-div" v-if="section.analysis">
-                        {{ section.analysis }}
-                      </pre>
-                      <Button
-                        @click="paperStore.enrichWithSectionAnalysis(section.title)"
-                        :disabled="paperStore.loading"
-                        >Perform Section Analysis
+                      <div v-else class="result-div" v-html="section.analysis ? marked.parse(section.analysis) : ''"></div>
+                      <pre class="result-div" v-if="section.analysis">{{ section.analysis }}</pre>
+                      <Button @click="paperStore.enrichWithSectionAnalysis(section.title)" :disabled="paperStore.loading">Perform Section Analysis
                       </Button>
                     </div>
                   </template>
@@ -400,11 +232,7 @@ promptStore.fetchReviewMessagePart()
               </li>
             </ul>
           </div>
-          <Button
-            @click="paperStore.getSectionTitles"
-            :disabled="paperStore.loading || !paperStore.content || !paperStore.paperType"
-            class="p-mt-3"
-          >
+          <Button @click="paperStore.getSectionTitles" :disabled="paperStore.loading || !paperStore.content || !paperStore.paperType" class="p-mt-3">
             Extract Sections
           </Button>
         </template>
@@ -419,51 +247,72 @@ promptStore.fetchReviewMessagePart()
 }
 
 :global(body) {
-  background: linear-gradient(135deg, #e0f7fa 0%, #e8f5e9 100%);
+  background: linear-gradient(135deg, #f5f7fa 0%, #e5e7eb 100%);
   min-height: 100vh;
   font-family: 'Segoe UI', 'Roboto', 'Arial', sans-serif;
+  color: #1f2937;
 }
 
 #paper-content {
   max-height: 50vh;
   max-width: 75vw;
   overflow-y: auto;
-  background: #f4faff;
+  background: #ffffff;
   border-radius: 8px;
-  border: 1px solid #b2ebf2;
+  border: 1px solid #e5e7eb;
   padding: 1em;
-  color: #234;
+  color: #1f2937;
   font-size: 1.05em;
-  box-shadow: 0 2px 8px 0 rgba(60, 60, 60, 0.07);
+  box-shadow: 0 2px 8px 0 rgba(0, 0, 0, 0.1);
 }
 
 .card {
   box-shadow:
-    0 4px 16px 0 rgba(60, 120, 120, 0.13),
-    0 2px 8px 0 rgba(60, 120, 120, 0.09);
+    0 4px 16px 0 rgba(0, 0, 0, 0.1),
+    0 2px 8px 0 rgba(0, 0, 0, 0.06);
   padding: 1.5em 1.5em 1em 1.5em;
   margin: 2em 0;
   border-radius: 18px;
-  border: 1.5px solid #b2dfdb;
-  background: linear-gradient(120deg, #e3fdfd 0%, #e8f5e9 100%);
+  border: 1.5px solid #e5e7eb;
+  background: linear-gradient(120deg, #ffffff 0%, #f9fafb 100%);
   transition: box-shadow 0.2s;
 }
 
 .card:hover {
   box-shadow:
-    0 8px 32px 0 rgba(60, 120, 120, 0.18),
-    0 4px 16px 0 rgba(60, 120, 120, 0.13);
-  border-color: #4dd0e1;
+    0 8px 32px 0 rgba(0, 0, 0, 0.15),
+    0 4px 16px 0 rgba(0, 0, 0, 0.1);
+  border-color: #60a5fa;
 }
 
-form > * {
+form>* {
   margin-top: 1em;
 }
 
 .p-error {
-  background: #ffebee;
-  color: #b71c1c;
-  border: 1px solid #ef9a9a;
+  background: #fee2e2;
+  color: #991b1b;
+  border: 1px solid #fca5a5;
+  border-radius: 8px;
+  padding: 0.75em 1em;
+  margin-bottom: 1em;
+  font-size: 1em;
+}
+
+.p-hint {
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fde68a;
+  border-radius: 8px;
+  padding: 0.75em 1em;
+  margin-bottom: 1em;
+  font-size: 1em;
+}
+
+.p-hint {
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fde68a;
   border-radius: 8px;
   padding: 0.75em 1em;
   margin-bottom: 1em;
@@ -477,15 +326,15 @@ form > * {
   overflow-y: auto;
   white-space: pre-wrap;
   word-break: break-word;
-  background: linear-gradient(90deg, #e3f2fd 0%, #e0f7fa 100%);
-  border: 1.5px solid #90caf9;
+  background: linear-gradient(90deg, #faf5ff 0%, #f5f3ff 100%);
+  border: 1.5px solid #d8b4fe;
   border-radius: 8px;
   padding: 0.75em 1em;
   margin-bottom: 0.75em;
-  color: #1565c0;
+  color: #7c3aed;
   font-size: 1.04em;
   font-family: 'Fira Mono', 'Consolas', 'Menlo', monospace;
-  box-shadow: 0 1px 4px 0 rgba(33, 150, 243, 0.07);
+  box-shadow: 0 1px 4px 0 rgba(124, 58, 237, 0.08);
 }
 
 .result-div {
@@ -493,13 +342,13 @@ form > * {
   max-height: 50vh;
   overflow-x: auto;
   overflow-y: auto;
-  background: linear-gradient(90deg, #e8f5e9 0%, #e0f7fa 100%);
-  border: 1.5px solid #81c784;
+  background: linear-gradient(90deg, #f3f4f6 0%, #ffffff 100%);
+  border: 1.5px solid #d1d5db;
   border-radius: 8px;
   padding: 0.85em 1.1em;
   margin-bottom: 0.85em;
   word-break: break-word;
-  color: #256029;
+  color: #1f2937;
   font-size: 1.08em;
   font-family: 'Segoe UI', 'Roboto', 'Arial', sans-serif;
   box-shadow: 0 1px 4px 0 rgba(56, 142, 60, 0.07);
@@ -543,25 +392,189 @@ strong {
   margin-bottom: 1em;
 }
 
+.form-select {
+  width: 100%;
+  padding: 0.75rem;
+  font-size: 1rem;
+  border: 1.5px solid #bfdbfe;
+  border-radius: 8px;
+  background: linear-gradient(90deg, #f0f9ff 0%, #eff6ff 100%);
+  cursor: pointer;
+  color: #1e40af;
+  transition: all 0.2s;
+  font-weight: 500;
+}
+
+.form-select:focus {
+  outline: none;
+  border-color: #60a5fa;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+  background: linear-gradient(90deg, #dbeafe 0%, #e0f2fe 100%);
+}
+
 input[type='checkbox'] {
-  accent-color: #26a69a;
+  accent-color: #10b981;
   margin-right: 0.5em;
+  cursor: pointer;
+  width: 18px;
+  height: 18px;
+}
+
+input[type='text'] {
+  width: 100%;
+  padding: 0.75rem;
+  font-size: 1rem;
+  border: 1.5px solid #bfdbfe;
+  border-radius: 8px;
+  background: linear-gradient(90deg, #f0f9ff 0%, #eff6ff 100%);
+  color: #1e40af;
+  transition: all 0.2s;
+  font-weight: 500;
+}
+
+input[type='text']::placeholder {
+  color: #7dd3fc;
+}
+
+input[type='text']:focus {
+  outline: none;
+  border-color: #60a5fa;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+  background: linear-gradient(90deg, #dbeafe 0%, #e0f2fe 100%);
 }
 
 input[type='number'] {
-  border: 1px solid #b2ebf2;
-  border-radius: 6px;
-  padding: 0.3em 0.7em;
-  font-size: 1em;
-  background: #f4faff;
-  color: #234;
+  border: 1.5px solid #bfdbfe;
+  border-radius: 8px;
+  padding: 0.75rem;
+  font-size: 1rem;
+  background: linear-gradient(90deg, #f0f9ff 0%, #eff6ff 100%);
+  color: #1e40af;
   margin-right: 0.5em;
+  transition: all 0.2s;
+  font-weight: 500;
+}
+
+input[type='number']:focus {
+  outline: none;
+  border-color: #60a5fa;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+  background: linear-gradient(90deg, #dbeafe 0%, #e0f2fe 100%);
 }
 
 label {
-  color: #00796b;
+  color: #1f2937;
   font-size: 1em;
   margin-left: 0.2em;
+}
+
+.file-upload-container {
+  margin-bottom: 1.5em;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  cursor: pointer;
+}
+
+.file-input-hidden {
+  display: none;
+}
+
+.file-upload-area {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  border: 2.5px dashed #bfdbfe;
+  border-radius: 12px;
+  padding: 2.5rem 1.5rem;
+  background: linear-gradient(90deg, #f0f9ff 0%, #eff6ff 100%);
+  color: #1e40af;
+  transition: all 0.3s;
+  min-height: 140px;
+  text-align: center;
+}
+
+.file-upload-container:hover .file-upload-area:not(:has(input:disabled)) {
+  border-color: #60a5fa;
+  background: linear-gradient(90deg, #e0f2fe 0%, #dbeafe 100%);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.12);
+}
+
+.file-upload-container:focus-within .file-upload-area {
+  border-color: #60a5fa;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+  background: linear-gradient(90deg, #dbeafe 0%, #e0f2fe 100%);
+}
+
+.upload-icon {
+  font-size: 2.5rem;
+  line-height: 1;
+}
+
+.upload-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-weight: 600;
+}
+
+.upload-text strong {
+  color: #1e40af;
+  font-size: 1.05rem;
+}
+
+.upload-hint {
+  font-size: 0.85rem;
+  font-weight: 400;
+  color: #60a5fa;
+}
+
+.file-input-hidden:disabled~.file-upload-area {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.file-display {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.25rem;
+  background: linear-gradient(90deg, #f0f9ff 0%, #eff6ff 100%);
+  border: 1.5px solid #bfdbfe;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.08);
+}
+
+.file-name {
+  color: #1e40af;
+  font-weight: 600;
+  font-size: 0.95rem;
+  word-break: break-word;
+}
+
+.clear-button {
+  padding: 0.5rem 0.75rem;
+  margin-left: 1rem;
+  border: 1px solid #dc2626;
+  border-radius: 4px;
+  background: #fee2e2;
+  color: #991b1b;
+  font-weight: 600;
+  font-size: 1.2rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+.clear-button:hover {
+  background: #fecaca;
+  border-color: #b91c1c;
+}
+
+.clear-button:active {
+  transform: scale(0.95);
 }
 
 ul {
