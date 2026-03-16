@@ -10,7 +10,6 @@
       <div v-if="paperStore.reviews.length === 0" class="empty-state">
         No reviews yet. Use the editor above to generate your first review.
       </div>
-
       <div v-else class="reviews-list">
         <div v-for="review in paperStore.reviews" :key="review.id" class="review-card">
           <div class="review-header" @click="toggleExpand(review.id)">
