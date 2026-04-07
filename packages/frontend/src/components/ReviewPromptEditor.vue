@@ -92,6 +92,7 @@ const loading = ref(false)
 const error = ref('')
 const showWarning = ref(false)
 const pendingReviewType = ref('')
+const previousReviewType = ref('')
 
 // Track settings state to detect changes
 const settingsSnapshot = ref<{
@@ -107,26 +108,27 @@ const settingsChanged = ref(false)
 function handleReviewTypeChange() {
   const newType = selectedReviewType.value
 
-  // If no previous type was selected or no changes, load directly
-  if (!pendingReviewType.value || !isDirty.value) {
+  // If no previous type was selected or no unsaved changes, load directly
+  if (!previousReviewType.value || !isDirty.value) {
+    previousReviewType.value = newType
+    pendingReviewType.value = newType
     loadPromptsForType(newType)
     takeSettingsSnapshot()
     return
   }
 
-  // Show warning if there are unsaved changes
+  // Unsaved changes: show warning and revert dropdown to previous selection
   if (isDirty.value) {
     pendingReviewType.value = newType
+    selectedReviewType.value = previousReviewType.value  // revert dropdown immediately
     showWarning.value = true
-  } else {
-    loadPromptsForType(newType)
-    takeSettingsSnapshot()
   }
 }
 
 function confirmWarning() {
   showWarning.value = false
   selectedReviewType.value = pendingReviewType.value
+  previousReviewType.value = pendingReviewType.value
   loadPromptsForType(pendingReviewType.value)
   takeSettingsSnapshot()
   pendingReviewType.value = ''
@@ -134,8 +136,7 @@ function confirmWarning() {
 
 function cancelWarning() {
   showWarning.value = false
-  // Revert to previous selection
-  selectedReviewType.value = selectedReviewType.value
+  // selectedReviewType was already reverted in handleReviewTypeChange
   pendingReviewType.value = ''
 }
 
