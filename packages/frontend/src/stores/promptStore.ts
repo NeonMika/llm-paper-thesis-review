@@ -10,16 +10,16 @@ export const usePromptStore = defineStore('promptStore', () => {
   const sectionsSystemPrompt = ref('')
 
   // Errors for section prompts
-  const sectionAnalysisSystemPromptError = ref<unknown | null>(null)
-  const sectionAnalysisMessagePartError = ref<unknown | null>(null)
-  const sectionsSystemPromptError = ref<unknown | null>(null)
+  const sectionAnalysisSystemPromptError = ref<unknown>(null)
+  const sectionAnalysisMessagePartError = ref<unknown>(null)
+  const sectionsSystemPromptError = ref<unknown>(null)
 
   // Combined prompts for editor
   const currentSystemPrompt = ref('')
   const currentMessagePart = ref('')
   const originalSystemPrompt = ref('')
   const originalMessagePart = ref('')
-  const combinedPromptError = ref<unknown | null>(null)
+  const combinedPromptError = ref<unknown>(null)
 
   const paperStore = usePaperStore()
   const {
@@ -43,13 +43,13 @@ export const usePromptStore = defineStore('promptStore', () => {
     try {
       const { data, error } = await api.section_analysis_system_prompt.post({
         file: file.value,
-        sectionTitle : sectionTitle,
+        sectionTitle,
         kind: paperType.value,
         workInProgress: wip.value,
         hasPageLimit: hasPageLimit.value,
-        pageLimit: pageLimit.value + "",
-        currentPages: currentPages.value + "",
-        apiKey: apiKey.value || "",
+        pageLimit: pageLimit.value + '',
+        currentPages: currentPages.value + '',
+        apiKey: apiKey.value || '',
         model: model.value,
       })
       if (error) throw error
@@ -75,9 +75,9 @@ export const usePromptStore = defineStore('promptStore', () => {
         kind: paperType.value,
         workInProgress: wip.value,
         hasPageLimit: hasPageLimit.value,
-        pageLimit: pageLimit.value + "",
-        currentPages: currentPages.value + "",
-        apiKey: apiKey.value || "",
+        pageLimit: pageLimit.value + '',
+        currentPages: currentPages.value + '',
+        apiKey: apiKey.value || '',
         model: model.value,
       })
       if (error) throw error
@@ -103,6 +103,14 @@ export const usePromptStore = defineStore('promptStore', () => {
     }
   }
 
+  function applyLoadedPrompts(data: { systemPrompt: string; messagePart: string }) {
+    currentSystemPrompt.value = data.systemPrompt
+    currentMessagePart.value = data.messagePart
+    originalSystemPrompt.value = data.systemPrompt
+    originalMessagePart.value = data.messagePart
+    combinedPromptError.value = null
+  }
+
   // Combined prompt fetchers for ReviewPromptEditor
   async function fetchCombinedAnalysisPrompt() {
     if (!file.value || !paperType.value) {
@@ -117,15 +125,11 @@ export const usePromptStore = defineStore('promptStore', () => {
         hasPageLimit: hasPageLimit.value,
         pageLimit: pageLimit.value + '',
         currentPages: currentPages.value + '',
-        apiKey: apiKey.value || "",
+        apiKey: apiKey.value || '',
         model: model.value,
       })
       if (error) throw error
-      currentSystemPrompt.value = data.systemPrompt
-      currentMessagePart.value = data.messagePart
-      originalSystemPrompt.value = data.systemPrompt
-      originalMessagePart.value = data.messagePart
-      combinedPromptError.value = null
+      applyLoadedPrompts(data)
     } catch (err) {
       combinedPromptError.value = err
     }
@@ -144,67 +148,57 @@ export const usePromptStore = defineStore('promptStore', () => {
         hasPageLimit: hasPageLimit.value,
         pageLimit: pageLimit.value + '',
         currentPages: currentPages.value + '',
-        apiKey: apiKey.value || "",
+        apiKey: apiKey.value || '',
         model: model.value,
       })
       if (error) throw error
-      currentSystemPrompt.value = data.systemPrompt
-      currentMessagePart.value = data.messagePart
-      originalSystemPrompt.value = data.systemPrompt
-      originalMessagePart.value = data.messagePart
-      combinedPromptError.value = null
+      applyLoadedPrompts(data)
     } catch (err) {
       combinedPromptError.value = err
     }
   }
 
   async function fetchCombinedReviewPrompt() {
-    if (!file.value) {
-      combinedPromptError.value = 'File must be set'
+    if (!file.value || !paperType.value) {
+      combinedPromptError.value = 'File and paper type must be set'
       return
     }
     try {
       const { data, error } = await api.prompt.review.combined.post({
         file: file.value,
-        apiKey: apiKey.value || "",
+        apiKey: apiKey.value || '',
         model: model.value,
         kind: paperType.value,
         hasPageLimit: hasPageLimit.value,
         pageLimit: pageLimit.value + '',
         currentPages: currentPages.value + '',
+        workInProgress: wip.value,
       })
       if (error) throw error
-      currentSystemPrompt.value = data.systemPrompt
-      currentMessagePart.value = data.messagePart
-      originalSystemPrompt.value = data.systemPrompt
-      originalMessagePart.value = data.messagePart
-      combinedPromptError.value = null
+      applyLoadedPrompts(data)
     } catch (err) {
       combinedPromptError.value = err
     }
   }
 
   async function fetchCombinedAseReviewPrompt() {
-    if (!file.value) {
-      combinedPromptError.value = 'File must be set'
+    if (!file.value || !paperType.value) {
+      combinedPromptError.value = 'File and paper type must be set'
       return
     }
     try {
       const { data, error } = await api.prompt['ase-review'].combined.post({
         file: file.value,
-        apiKey: apiKey.value || "",
+        apiKey: apiKey.value || '',
         model: model.value,
         kind: paperType.value,
         hasPageLimit: hasPageLimit.value,
         pageLimit: pageLimit.value + '',
         currentPages: currentPages.value + '',
+        workInProgress: wip.value,
       })
       if (error) throw error
-      currentSystemPrompt.value = data.systemPrompt
-      currentMessagePart.value = data.messagePart
-      originalSystemPrompt.value = data.systemPrompt
-      originalMessagePart.value = data.messagePart
-      combinedPromptError.value = null
+      applyLoadedPrompts(data)
     } catch (err) {
       combinedPromptError.value = err
     }
@@ -249,12 +243,16 @@ export const usePromptStore = defineStore('promptStore', () => {
   // Watcher for section prompts (still needed for Section Titles feature)
   watch([file, paperType, wip, hasPageLimit, pageLimit, currentPages, sections], async () => {
     if (!sections.value.length) return
-    for (const section of sections.value) {
-      if (section.title) {
-        await fetchSectionAnalysisSystemPrompt(section.title)
-        await fetchSectionAnalysisMessagePart(section.title)
-      }
-    }
+    await Promise.all(
+      sections.value.flatMap((section) =>
+        section.title
+          ? [
+              fetchSectionAnalysisSystemPrompt(section.title),
+              fetchSectionAnalysisMessagePart(section.title),
+            ]
+          : []
+      )
+    )
   }, { immediate: true })
 
   fetchSectionsSystemPrompt()
@@ -268,8 +266,6 @@ export const usePromptStore = defineStore('promptStore', () => {
     // Combined prompts for editor
     currentSystemPrompt,
     currentMessagePart,
-    originalSystemPrompt,
-    originalMessagePart,
     isDirty,
     combinedPromptError,
 
