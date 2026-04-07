@@ -37,7 +37,7 @@ export const usePromptStore = defineStore('promptStore', () => {
   // Section analysis prompts (still used by Section Titles feature)
   async function fetchSectionAnalysisSystemPrompt(sectionTitle: string) {
     if (!file.value || !sectionTitle || !paperType.value) {
-      sectionAnalysisSystemPromptError.value = `fetchSectionAnalysisSystemPrompt: file, sectionTitle und paperType müssen gesetzt sein. file: ${!!file.value}, sectionTitle: ${!!sectionTitle}, paperType: ${!!paperType.value}`
+      sectionAnalysisSystemPromptError.value = `fetchSectionAnalysisSystemPrompt: file, sectionTitle and paperType must be set. file: ${!!file.value}, sectionTitle: ${!!sectionTitle}, paperType: ${!!paperType.value}`
       return
     }
     try {
@@ -65,7 +65,7 @@ export const usePromptStore = defineStore('promptStore', () => {
 
   async function fetchSectionAnalysisMessagePart(sectionTitle: string) {
     if (!file.value || !sectionTitle || !paperType.value) {
-      sectionAnalysisMessagePartError.value = `fetchSectionAnalysisMessagePart: file, sectionTitle und paperType müssen gesetzt sein. file: ${!!file.value}, sectionTitle: ${!!sectionTitle}, paperType: ${!!paperType.value}`
+      sectionAnalysisMessagePartError.value = `fetchSectionAnalysisMessagePart: file, sectionTitle and paperType must be set. file: ${!!file.value}, sectionTitle: ${!!sectionTitle}, paperType: ${!!paperType.value}`
       return
     }
     try {
