@@ -7,6 +7,7 @@ export async function createFileOrImageMessagePart(file: File): Promise<ImagePar
 
     switch (extension) {
         case 'txt':
+        case 'tex':
         case 'md':
         case 'csv':
         case 'json':

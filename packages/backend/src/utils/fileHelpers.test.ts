@@ -30,6 +30,12 @@ describe('createFileOrImageMessagePart', () => {
         expect((part as any).mediaType).toBe('text/plain');
     });
 
+    it('maps .tex to text/plain file part', async () => {
+        const part = await createFileOrImageMessagePart(makeFile('paper.tex'));
+        expect(part.type).toBe('file');
+        expect((part as any).mediaType).toBe('text/plain');
+    });
+
     it('maps .pdf to application/pdf file part', async () => {
         const part = await createFileOrImageMessagePart(makeFile('paper.pdf'));
         expect(part.type).toBe('file');

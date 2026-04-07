@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'bun:test';
-import { google, getModelFromBody, normalizePrompt, pro, flash } from '../utils/model';
+import { getModelFromBody, normalizePrompt, pro, flash } from '../utils/model';
 
 describe('normalizePrompt', () => {
     it('returns undefined for undefined', () => {
