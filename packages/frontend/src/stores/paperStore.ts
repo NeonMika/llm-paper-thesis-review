@@ -266,6 +266,10 @@ export const usePaperStore = defineStore('paper', () => {
       apiKey: apiKey.value || "",
       model: model.value,
       kind: paperType.value,
+      workInProgress: wip.value,
+      hasPageLimit: hasPageLimit.value,
+      pageLimit: pageLimit.value + '',
+      currentPages: currentPages.value + '',
     }
 
     if (customSystemPrompt !== undefined && customSystemPrompt !== null && String(customSystemPrompt).trim() !== '') {
