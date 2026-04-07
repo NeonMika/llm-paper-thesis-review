@@ -1,6 +1,29 @@
 import type { TextPart } from 'ai';
 import type { AnalysisBody, ReviewBody, SectionAnalysisBody } from './schemas.ts';
 
+// ─── Shared prompt helpers ────────────────────────────────────────────────────
+
+function buildContextPreamble(body: ReviewBody | undefined, wipNote: string): string {
+    const wip = body?.workInProgress ? `\n${wipNote}` : '';
+    const page =
+        body?.hasPageLimit && body?.pageLimit
+            ? `\nNote: The paper has a **page limit of ${body.pageLimit} pages** and is currently at **${body.currentPages ?? '?'} pages**.`
+            : '';
+    return wip + page;
+}
+
+function getOverallAnalysisFeedbackCriteria(kind: string): string {
+    return `- Assess for **adherence to standards of scientific writing**.
+- Assess **understandability**. For example, are there areas where explanations are overly complicated or difficult to understand? Are enough examples and figures used to support complex parts? Are technical terms and abbreviations explained in enough detail?
+- Assess **structure**. We strive for good reading flow and readability. For example, does each chapter use a clear structure with subsections, paragraphs, and so on? Are structural elements (lists, enumerations, tables, etc.) used where applicable? Are conjunctions between sentences and transitions between sections and paragraphs used to enhance flow?
+- Assess **clarity and text quality**. We want easy-to-follow text that still provides enough detail.
+- Assess **spelling and grammar**. Make sure that the text is free of spelling mistakes and grammatical errors.
+- Assess **American English** or **British English** consistency. Make sure that the text consistently uses either American or British English.
+- Assess **all other quality aspects** that are relevant to a computer science ${kind}.`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 export function getOverallAnalysisSystemPrompt(body: AnalysisBody) {
     return `You are an intelligent writing assistant for reviewing a computer science ${body.kind}.
 You are proficient in computer science and software engineering, with expert knowledge in technical and scientific writing in the field of computer science.
@@ -26,13 +49,7 @@ Carefully examine the whole ${body.kind}.
 Make sure that you completely understand what the work is about.
 Once you have fully internalized the topic, provide feedback according to the following points for the overall ${body.kind}:
 
-- Assess for **adherence to standards of scientific writing**.
-- Assess **understandability**. For example, are there areas where explanations are overly complicated or difficult to understand? Are enough examples and figures used to support complex parts? Are technical terms and abbreviations explained in enough detail?
-- Assess **structure**. We strive for good reading flow and readability. For example, does each chapter use a clear structure with subsections, paragraphs, and so on? Are structural elements (lists, enumerations, tables, etc.) used where applicable? Are conjunctions between sentences and transitions between sections and paragraphs used to enhance flow?
-- Assess **clarity and text quality**. We want easy-to-follow text that still provides enough detail.
-- Assess **spelling and grammar**. Make sure that the text is free of spelling mistakes and grammatical errors.
-- Assess **American English** or **British English** consistency. Make sure that the text consistently uses either American or British English.
-- Assess **all other quality aspects** that are relevant to a computer science ${body.kind}.
+${getOverallAnalysisFeedbackCriteria(body.kind)}
 
 For each assessment point, provide _strengths_ and _areas for improvement_ (if any).
 `,
@@ -50,13 +67,7 @@ First, carefully examine the whole ${body.kind}.
 Make sure that you completely understand what the work is about.
 Once you have fully internalized the topic, provide feedback according to the following points for the overall ${body.kind}:
 
-- Assess for **adherence to standards of scientific writing**.
-- Assess **understandability**. For example, are there areas where explanations are overly complicated or difficult to understand? Are enough examples and figures used to support complex parts? Are technical terms and abbreviations explained in enough detail?
-- Assess **structure**. We strive for good reading flow and readability. For example, does each chapter use a clear structure with subsections, paragraphs, and so on? Are structural elements (lists, enumerations, tables, etc.) used where applicable? Are conjunctions between sentences and transitions between sections and paragraphs used to enhance flow?
-- Assess **clarity and text quality**. We want easy-to-follow text that still provides enough detail.
-- Assess **spelling and grammar**. Make sure that the text is free of spelling mistakes and grammatical errors.
-- Assess **American English** or **British English** consistency. Make sure that the text consistently uses either American or British English.
-- Assess **all other quality aspects** that are relevant to a computer science ${body.kind}.
+${getOverallAnalysisFeedbackCriteria(body.kind)}
 
 For each assessment point, provide _strengths_ and _areas for improvement_ (if any).
 
@@ -84,15 +95,12 @@ Provide concise, focused, concrete actionable improvements:
 }
 
 export function getReviewSystemPrompt(body?: ReviewBody) {
-    const wipContext = body?.workInProgress
-        ? `\nNote: This paper is a **work in progress**. The authors may be submitting an early or incomplete draft. Please weigh this context accordingly in your assessment.`
-        : '';
-    const pageContext =
-        body?.hasPageLimit && body?.pageLimit
-            ? `\nNote: The paper has a **page limit of ${body.pageLimit} pages** and is currently at **${body.currentPages ?? '?'} pages**.`
-            : '';
+    const preamble = buildContextPreamble(
+        body,
+        'Note: This paper is a **work in progress**. The authors may be submitting an early or incomplete draft. Please weigh this context accordingly in your assessment.'
+    );
     return `# ROLE AND GOAL
-${wipContext}${pageContext}
+${preamble}
 You are a world-class, seasoned reviewer for a scientific computer science conference.
 Your expertise spans computer science and software engineering, with a deep understanding of academic research methodologies and technical writing standards.
 
@@ -200,15 +208,12 @@ Be specific, honest, and constructive.`,
 }
 
 export function getAseSystemPrompt(body?: ReviewBody) {
-    const wipContext = body?.workInProgress
-        ? `\nNote: This paper is a **work in progress**. Please weigh this context accordingly in your assessment.`
-        : '';
-    const pageContext =
-        body?.hasPageLimit && body?.pageLimit
-            ? `\nNote: The paper has a **page limit of ${body.pageLimit} pages** and is currently at **${body.currentPages ?? '?'} pages**.`
-            : '';
+    const preamble = buildContextPreamble(
+        body,
+        'Note: This paper is a **work in progress**. Please weigh this context accordingly in your assessment.'
+    );
     return `# ROLE AND GOAL
-${wipContext}${pageContext}
+${preamble}
 You are a world-class, seasoned reviewer for the IEEE/ACM International Conference on Automated Software Engineering (ASE), specifically for the Industry Showcase track.
 Your expertise spans automated software engineering, industrial practice, and the application of automation in real-world software systems.
 
@@ -331,9 +336,8 @@ Provide concise, focused, concrete actionable improvements:
 }
 
 export function getSectionsSystemPrompt() {
-    return 'Your are given a document that is split into sections. Extract the section titles. Also include sections that do not have a number (e.g., Abstract)';
+    return 'You are given a document that is split into sections. Extract the section titles. Also include sections that do not have a number (e.g., Abstract)';
 }
 
-export function getNewFileFollowUpInstruction() {
-    return `I have revised the paper based on your feedback. Here is the updated version. Please evaluate the changes, noting what has improved and whether any issues remain or new ones have emerged.`;
-}
+export const NEW_FILE_FOLLOW_UP_INSTRUCTION =
+    'I have revised the paper based on your feedback. Here is the updated version. Please evaluate the changes, noting what has improved and whether any issues remain or new ones have emerged.';
