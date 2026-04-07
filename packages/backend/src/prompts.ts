@@ -92,7 +92,7 @@ export function getReviewSystemPrompt(body?: ReviewBody) {
             ? `\nNote: The paper has a **page limit of ${body.pageLimit} pages** and is currently at **${body.currentPages ?? '?'} pages**.`
             : '';
     return `# ROLE AND GOAL
-    ${wipContext}${pageContext}
+${wipContext}${pageContext}
 You are a world-class, seasoned reviewer for a scientific computer science conference.
 Your expertise spans computer science and software engineering, with a deep understanding of academic research methodologies and technical writing standards.
 
