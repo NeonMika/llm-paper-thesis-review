@@ -1,6 +1,8 @@
 import { treaty } from '@elysiajs/eden';
-import type { App } from '../../backend/src/index'; // Import the backend type
+import type { App } from '../../backend/src/index';
 
-const api = treaty<App>('http://localhost:3000');
+export const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3000'
+
+const api = treaty<App>(BASE_URL);
 
 export default api;

@@ -1,7 +1,7 @@
 import { computed, type Ref, ref } from 'vue'
 import { defineStore } from 'pinia'
 
-import api from '../api'
+import api, { BASE_URL } from '../api'
 import type { Section } from '../../../backend/src'
 import { DEFAULT_FILE_FOLLOW_UP_INSTRUCTION } from '../constants'
 
@@ -363,7 +363,7 @@ export const usePaperStore = defineStore('paper', () => {
       throw new Error('Either a file or a text message must be provided')
     }
 
-    const response = await fetch('http://localhost:3000/follow_up', {
+    const response = await fetch(`${BASE_URL}/follow_up`, {
       method: 'POST',
       body: formData,
     })
