@@ -118,11 +118,9 @@ function handleReviewTypeChange() {
   }
 
   // Unsaved changes: show warning and revert dropdown to previous selection
-  if (isDirty.value) {
-    pendingReviewType.value = newType
-    selectedReviewType.value = previousReviewType.value  // revert dropdown immediately
-    showWarning.value = true
-  }
+  pendingReviewType.value = newType
+  selectedReviewType.value = previousReviewType.value  // revert dropdown immediately
+  showWarning.value = true
 }
 
 function confirmWarning() {
