@@ -32,9 +32,6 @@ const modelOptions = [
   { label: 'Gemini 3 Flash Preview', value: 'flash' },
 ]
 
-// Initialize sections system prompt
-promptStore.fetchSectionsSystemPrompt()
-
 // Warn before leaving page if there are unsaved changes
 function handleBeforeUnload(event: BeforeUnloadEvent) {
   if (promptStore.isDirty) {
