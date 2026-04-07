@@ -110,8 +110,7 @@ export const usePromptStore = defineStore('promptStore', () => {
       return
     }
     try {
-      // @ts-expect-error - API endpoint exists but types not yet regenerated
-      const { data, error } = await api['prompt/analysis/combined'].post({
+      const { data, error } = await api.prompt.analysis.combined.post({
         file: file.value,
         kind: paperType.value,
         workInProgress: wip.value,
@@ -138,8 +137,7 @@ export const usePromptStore = defineStore('promptStore', () => {
       return
     }
     try {
-      // @ts-expect-error - API endpoint exists but types not yet regenerated
-      const { data, error } = await api['prompt/analysis-detailed/combined'].post({
+      const { data, error } = await api.prompt['analysis-detailed'].combined.post({
         file: file.value,
         kind: paperType.value,
         workInProgress: wip.value,
@@ -166,8 +164,7 @@ export const usePromptStore = defineStore('promptStore', () => {
       return
     }
     try {
-      // @ts-expect-error - API endpoint exists but types not yet regenerated
-      const { data, error } = await api['prompt/review/combined'].post({
+      const { data, error } = await api.prompt.review.combined.post({
         file: file.value,
         apiKey: apiKey.value || "",
         model: model.value,
@@ -193,8 +190,7 @@ export const usePromptStore = defineStore('promptStore', () => {
       return
     }
     try {
-      // @ts-expect-error - API endpoint exists but types not yet regenerated
-      const { data, error } = await api['prompt/ase-review/combined'].post({
+      const { data, error } = await api.prompt['ase-review'].combined.post({
         file: file.value,
         apiKey: apiKey.value || "",
         model: model.value,
