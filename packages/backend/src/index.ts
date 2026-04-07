@@ -39,7 +39,11 @@ const reviewBodySchema = t.Object({
         t.Literal("university seminar paper")
     ]),
     customSystemPrompt: t.Optional(t.String()),
-    customMessagePart: t.Optional(t.String())
+    customMessagePart: t.Optional(t.String()),
+    workInProgress: t.Optional(t.BooleanString()),
+    hasPageLimit: t.Optional(t.BooleanString()),
+    pageLimit: t.Optional(t.String()),
+    currentPages: t.Optional(t.String()),
 })
 
 type ReviewBody = typeof reviewBodySchema.static
@@ -268,9 +272,15 @@ Provide concise, focused, concrete actionable improvements:
     }
 }
 
-function getReviewSystemPrompt() {
+function getReviewSystemPrompt(body?: ReviewBody) {
+    const wipContext = body?.workInProgress
+        ? `\nNote: This paper is a **work in progress**. The authors may be submitting an early or incomplete draft. Please weigh this context accordingly in your assessment.`
+        : '';
+    const pageContext = body?.hasPageLimit && body?.pageLimit
+        ? `\nNote: The paper has a **page limit of ${body.pageLimit} pages** and is currently at **${body.currentPages ?? '?'} pages**.`
+        : '';
     return `# ROLE AND GOAL
-    
+    ${wipContext}${pageContext}
 You are a world-class, seasoned reviewer for a scientific computer science conference.
 Your expertise spans computer science and software engineering, with a deep understanding of academic research methodologies and technical writing standards.
 
@@ -377,9 +387,15 @@ Be specific, honest, and constructive.`
     }
 }
 
-function getAseSystemPrompt() {
+function getAseSystemPrompt(body?: ReviewBody) {
+    const wipContext = body?.workInProgress
+        ? `\nNote: This paper is a **work in progress**. Please weigh this context accordingly in your assessment.`
+        : '';
+    const pageContext = body?.hasPageLimit && body?.pageLimit
+        ? `\nNote: The paper has a **page limit of ${body.pageLimit} pages** and is currently at **${body.currentPages ?? '?'} pages**.`
+        : '';
     return `# ROLE AND GOAL
-
+${wipContext}${pageContext}
 You are a world-class, seasoned reviewer for the IEEE/ACM International Conference on Automated Software Engineering (ASE), specifically for the Industry Showcase track.
 Your expertise spans automated software engineering, industrial practice, and the application of automation in real-world software systems.
 
@@ -579,138 +595,14 @@ function logBeforeLLM(route: string, body: any, callMeta: { modelId: string, sys
 }
 
 // Make this async so we can read response bodies if necessary
-async function logAfterLLM(route: string, result: any) {
-    console.log(`[LLM CALL END] route=${route}`);
-    try {
-        // shallow summary of the result
-        console.log(`Model result (truncated):\n${safeStringify(result, 8000)}`);
-        if (result?.text) console.log(`Result.text (truncated, len=${String(result.text).length}):\n${truncate(result.text, 8000)}`);
-        if (result?.object) console.log(`Result.object (truncated):\n${safeStringify(result.object, 8000)}`);
-
-        // Log request metadata if available, but sanitize headers
-        if (result?.request) {
-            try {
-                const req = result.request as any;
-                const sanitizedReq: any = {};
-                if (req.method) sanitizedReq.method = req.method;
-                if (req.url) sanitizedReq.url = req.url;
-                if (req.headers) {
-                    const headers: any = {};
-                    // headers may be Headers, map, or object
-                    if (typeof req.headers.get === 'function') {
-                        // common Headers-like
-                        try {
-                            // iterate a few likely header names
-                            const names = ['content-type', 'authorization', 'user-agent', 'content-length'];
-                            names.forEach(n => {
-                                const v = req.headers.get(n);
-                                if (v) headers[n] = n.toLowerCase() === 'authorization' ? '[REDACTED]' : v;
-                            })
-                        } catch (e) { }
-                    } else if (typeof req.headers === 'object') {
-                        Object.entries(req.headers).forEach(([k, v]) => {
-                            const key = String(k).toLowerCase();
-                            headers[key] = key === 'authorization' || key.includes('api') || key.includes('key') ? '[REDACTED]' : v;
-                        })
-                    }
-                    sanitizedReq.headers = headers;
-                }
-                if (req.body) {
-                    try {
-                        sanitizedReq.body = truncate(typeof req.body === 'string' ? req.body : safeStringify(req.body, 2000), 2000);
-                    } catch (e) {
-                        sanitizedReq.body = '[unreadable]';
-                    }
-                }
-                console.log(`Request summary (sanitized):\n${safeStringify(sanitizedReq, 4000)}`);
-            } catch (e) {
-                console.log('[LLM CALL] Could not extract request metadata', e);
-            }
-        }
-
-        // Log response metadata if available
-        if (result?.response) {
-            try {
-                const rawResp = result.response as any;
-                const respSummary: any = {};
-                if (rawResp.status) respSummary.status = rawResp.status;
-                if (rawResp.statusText) respSummary.statusText = rawResp.statusText;
-
-                // Headers
-                if (rawResp.headers) {
-                    const headersOut: any = {};
-                    if (typeof rawResp.headers.get === 'function') {
-                        // try to read common headers
-                        ['content-type', 'content-length', 'date'].forEach(h => {
-                            try {
-                                const v = rawResp.headers.get(h);
-                                if (v) headersOut[h] = v;
-                            } catch (e) { }
-                        })
-                    } else if (typeof rawResp.headers === 'object') {
-                        Object.entries(rawResp.headers).forEach(([k, v]) => headersOut[String(k).toLowerCase()] = v);
-                    }
-                    respSummary.headers = headersOut;
-                }
-
-                // Body: if it's a fetch Response-like, try to read text
-                if (typeof rawResp.text === 'function') {
-                    try {
-                        const bodyText = await rawResp.text();
-                        respSummary.body = truncate(bodyText, 8000);
-                    } catch (e) {
-                        respSummary.body = '[unreadable body]';
-                    }
-                } else if (rawResp.body) {
-                    try {
-                        // body might be a stream or string
-                        if (typeof rawResp.body.getReader === 'function') {
-                            respSummary.body = '[stream]';
-                        } else if (typeof rawResp.body === 'string') {
-                            respSummary.body = truncate(rawResp.body, 8000);
-                        } else {
-                            respSummary.body = safeStringify(rawResp.body, 8000);
-                        }
-                    } catch (e) {
-                        respSummary.body = '[unreadable body]';
-                    }
-                }
-
-                console.log(`Response summary (truncated):\n${safeStringify(respSummary, 10000)}`);
-            } catch (e) {
-                console.log('[LLM CALL] Could not extract response metadata', e);
-            }
-        }
-
-        // Provider metadata often includes provider-specific raw info
-        if (result?.providerMetadata) {
-            try {
-                // sanitize potential nested headers
-                const meta = JSON.parse(JSON.stringify(result.providerMetadata));
-                // Walk through meta and redact obvious secrets in headers
-                function redact(obj: any) {
-                    if (!obj || typeof obj !== 'object') return obj;
-                    Object.keys(obj).forEach(k => {
-                        try {
-                            const v = obj[k];
-                            if (typeof v === 'string' && (k.toLowerCase().includes('authorization') || k.toLowerCase().includes('api') || k.toLowerCase().includes('key'))) {
-                                obj[k] = '[REDACTED]';
-                            } else if (v && typeof v === 'object') {
-                                redact(v);
-                            }
-                        } catch (e) { }
-                    })
-                }
-                redact(meta);
-                console.log(`Provider metadata (sanitized, truncated):\n${safeStringify(meta, 10000)}`);
-            } catch (e) {
-                console.log('[LLM CALL] Could not stringify providerMetadata', e);
-            }
-        }
-
-    } catch (e) {
-        console.log('[LLM CALL END] Could not stringify result', e);
-    }
+function logAfterLLM(route: string, result: { text?: string; object?: unknown; usage?: { promptTokens?: number; completionTokens?: number }; finishReason?: string }) {
+    console.log(
+        `[LLM CALL END] route=${route}`,
+        `finishReason=${result.finishReason ?? 'unknown'}`,
+        `promptTokens=${result.usage?.promptTokens ?? '?'}`,
+        `completionTokens=${result.usage?.completionTokens ?? '?'}`,
+        `outputLength=${result.text ? String(result.text).length : result.object ? JSON.stringify(result.object).length : 0}`
+    )
 }
 
 const app = new Elysia({
@@ -746,7 +638,7 @@ const app = new Elysia({
             temperature: 0.7,
         });
 
-        await logAfterLLM(route, result);
+        logAfterLLM(route, result);
 
         console.log("Overall analysis result:", JSON.stringify(result, null, 2));
 
@@ -782,7 +674,7 @@ const app = new Elysia({
             temperature: 0.7,
         });
 
-        await logAfterLLM(route, result);
+        logAfterLLM(route, result);
 
         console.log("Overall analysis result:", JSON.stringify(result, null, 2));
 
@@ -818,7 +710,7 @@ const app = new Elysia({
             temperature: 0.7,
         });
 
-        await logAfterLLM(route, result);
+        logAfterLLM(route, result);
 
         console.log("Section analysis result:", JSON.stringify(result, null, 2));
 
@@ -832,7 +724,7 @@ const app = new Elysia({
         const route = '/review';
         const modelId = getModelFromBody(body);
         const customSys = normalizePrompt(body.customSystemPrompt);
-        const systemPrompt = customSys ?? getReviewSystemPrompt();
+        const systemPrompt = customSys ?? getReviewSystemPrompt(body);
         const customMsg = normalizePrompt(body.customMessagePart);
         const promptSummary = customMsg ?? getReviewMessagePart(body).text;
 
@@ -853,7 +745,7 @@ const app = new Elysia({
             temperature: 0.7,
         });
 
-        await logAfterLLM(route, result);
+        logAfterLLM(route, result);
 
         console.log("Review result:", JSON.stringify(result, null, 2));
 
@@ -867,7 +759,7 @@ const app = new Elysia({
         const route = '/ase';
         const modelId = getModelFromBody(body);
         const customSys = normalizePrompt(body.customSystemPrompt);
-        const systemPrompt = customSys ?? getAseSystemPrompt();
+        const systemPrompt = customSys ?? getAseSystemPrompt(body);
         const customMsg = normalizePrompt(body.customMessagePart);
         const promptSummary = customMsg ?? getAseMessagePart().text;
 
@@ -888,7 +780,7 @@ const app = new Elysia({
             temperature: 0.7,
         });
 
-        await logAfterLLM(route, result);
+        logAfterLLM(route, result);
 
         return result.text;
     }, {
@@ -922,7 +814,7 @@ const app = new Elysia({
             ],
         })
 
-        await logAfterLLM(route, result);
+        logAfterLLM(route, result);
 
         console.log("Sections result:", JSON.stringify(result, null, 2));
 
@@ -954,7 +846,7 @@ const app = new Elysia({
         response: t.String(),
     })
     .post("/review_system_prompt", () => {
-        return getReviewSystemPrompt();
+        return getReviewSystemPrompt(body);
     }, {
         response: t.String(),
     })
@@ -984,7 +876,7 @@ const app = new Elysia({
         response: t.String(),
     })
     .post("/ase_system_prompt", () => {
-        return getAseSystemPrompt();
+        return getAseSystemPrompt(body);
     }, {
         response: t.String(),
     })
@@ -1021,7 +913,7 @@ const app = new Elysia({
     })
     .post("/prompt/review/combined", ({body}) => {
         return {
-            systemPrompt: getReviewSystemPrompt(),
+            systemPrompt: getReviewSystemPrompt(body),
             messagePart: getReviewMessagePart(body).text
         };
     }, {
@@ -1034,7 +926,7 @@ const app = new Elysia({
     })
     .post("/prompt/ase-review/combined", ({body}) => {
         return {
-            systemPrompt: getAseSystemPrompt(),
+            systemPrompt: getAseSystemPrompt(body),
             messagePart: getAseMessagePart().text
         };
     }, {
@@ -1088,7 +980,7 @@ const app = new Elysia({
             temperature: 0.7,
         });
 
-        await logAfterLLM(route, result);
+        logAfterLLM(route, result);
 
         return result.text;
     }, {
