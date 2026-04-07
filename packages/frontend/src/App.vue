@@ -219,11 +219,13 @@ function isValidationHint(error: unknown): boolean {
                       <pre v-if="promptStore.sectionAnalysisMessagePart[section.title]"
                         class="prompt-pre">{{ promptStore.sectionAnalysisMessagePart[section.title] }}</pre>
                       <strong>Result:</strong><br />
-                      <div v-if="paperStore.loadingSectionAnalysis" class="p-d-flex p-jc-center p-ai-center" style="height: 150px">
+                      <div v-if="paperStore.isLoadingSectionAnalysis(section.title)" class="p-d-flex p-jc-center p-ai-center" style="height: 150px">
                         <ProgressSpinner />
                       </div>
                       <div v-else class="result-div" v-html="section.analysis ? marked.parse(section.analysis) : ''"></div>
-                      <Button @click="paperStore.enrichWithSectionAnalysis(section.title)" :disabled="paperStore.loading">Perform Section Analysis
+                      <Button @click="paperStore.enrichWithSectionAnalysis(section.title)"
+                        :disabled="paperStore.loading || paperStore.isLoadingSectionAnalysis(section.title)"
+                        :loading="paperStore.isLoadingSectionAnalysis(section.title)">Perform Section Analysis
                       </Button>
                     </div>
                   </template>

@@ -1,4 +1,4 @@
-import { computed, type Ref, ref } from 'vue'
+import { computed, watch, type Ref, ref } from 'vue'
 import { defineStore } from 'pinia'
 
 import api, { BASE_URL } from '../api'
@@ -38,7 +38,14 @@ export const usePaperStore = defineStore('paper', () => {
   const loadingSections = ref(false)
 
   const sectionAnalysisError = ref<unknown | null>(null)
-  const loadingSectionAnalysis = ref(false)
+  const loadingSectionAnalysisSet = ref<Set<string>>(new Set())
+  const loadingSectionAnalysis = computed(() => loadingSectionAnalysisSet.value.size > 0)
+
+  const loadingReview = ref(false)
+
+  function isLoadingSectionAnalysis(sectionTitle: string): boolean {
+    return loadingSectionAnalysisSet.value.has(sectionTitle)
+  }
 
   const wip = ref(false)
   const paperType: Ref<
@@ -47,6 +54,9 @@ export const usePaperStore = defineStore('paper', () => {
   const hasPageLimit = ref(false)
   const pageLimit = ref(0)
   const currentPages = ref(0)
+
+  watch(pageLimit, (v) => { if (v < 0) pageLimit.value = 0 })
+  watch(currentPages, (v) => { if (v < 0) currentPages.value = 0 })
 
   const paperTypes = ref([
     { optionLabel: 'Full Conference Paper', optionValue: 'full conference paper' },
@@ -265,6 +275,7 @@ export const usePaperStore = defineStore('paper', () => {
       reviewRequestBody.customMessagePart = customMessagePart
     }
 
+    loadingReview.value = true
     try {
       let result = ''
       switch (type) {
@@ -301,30 +312,37 @@ export const usePaperStore = defineStore('paper', () => {
     } catch (error) {
       // Error is propagated to caller
       throw error
+    } finally {
+      loadingReview.value = false
     }
   }
 
   async function enrichWithSectionAnalysis(sectionTitle: string) {
     if (!file.value || !sectionTitle || !paperType.value) return
 
-    loadingSectionAnalysis.value = true
-    const { data, error } = await api.section_analysis.post({
-      file: file.value,
-      sectionTitle: sectionTitle,
-      kind: paperType.value,
-      workInProgress: wip.value,
-      hasPageLimit: hasPageLimit.value,
-      pageLimit: pageLimit.value + "",
-      currentPages: currentPages.value + "",
-      apiKey: apiKey.value || "",
-      model: model.value,
-    })
-    loadingSectionAnalysis.value = false
-    if (error) {
-      sectionAnalysisError.value = error
-      throw error
+    loadingSectionAnalysisSet.value = new Set(loadingSectionAnalysisSet.value).add(sectionTitle)
+    try {
+      const { data, error } = await api.section_analysis.post({
+        file: file.value,
+        sectionTitle: sectionTitle,
+        kind: paperType.value,
+        workInProgress: wip.value,
+        hasPageLimit: hasPageLimit.value,
+        pageLimit: pageLimit.value + "",
+        currentPages: currentPages.value + "",
+        apiKey: apiKey.value || "",
+        model: model.value,
+      })
+      if (error) {
+        sectionAnalysisError.value = error
+        throw error
+      }
+      sections.value.find((section) => section.title === sectionTitle)!.analysis = data
+    } finally {
+      const next = new Set(loadingSectionAnalysisSet.value)
+      next.delete(sectionTitle)
+      loadingSectionAnalysisSet.value = next
     }
-    sections.value.find((section) => section.title === sectionTitle)!.analysis = data
   }
 
   async function sendFollowUpRequest(
@@ -395,7 +413,8 @@ export const usePaperStore = defineStore('paper', () => {
     return (
       loadingContent.value ||
       loadingSections.value ||
-      loadingSectionAnalysis.value
+      loadingSectionAnalysis.value ||
+      loadingReview.value
     )
   })
 
@@ -425,6 +444,8 @@ export const usePaperStore = defineStore('paper', () => {
     loadingContent,
     loadingSections,
     loadingSectionAnalysis,
+    loadingReview,
+    isLoadingSectionAnalysis,
 
     // Methods
     readPaperFromFile,
