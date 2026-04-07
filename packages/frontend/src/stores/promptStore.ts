@@ -92,7 +92,7 @@ export const usePromptStore = defineStore('promptStore', () => {
   }
 
   async function fetchSectionsSystemPrompt() {
-    // keine Voraussetzungen
+    // no prerequisites
     try {
       const { data, error } = await api.sections_system_prompt.get()
       if (error) throw error

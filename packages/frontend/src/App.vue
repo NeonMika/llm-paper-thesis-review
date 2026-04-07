@@ -81,9 +81,9 @@ function isValidationHint(error: unknown): boolean {
               hit, provide your own key.</em>
           </p>
           <div class="form-group">
-            <label for="modelSelect">Modell</label>
+            <label for="modelSelect">Model</label>
             <select id="modelSelect" v-model="paperStore.model" class="form-select">
-              <option value="" disabled>Modell wählen</option>
+              <option value="" disabled>Select a model</option>
               <option v-for="option in modelOptions" :key="option.value" :value="option.value">
                 {{ option.label }}
               </option>
