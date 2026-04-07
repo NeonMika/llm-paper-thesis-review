@@ -1,21 +1,15 @@
 export function maskApiKey(key: string | undefined | null) {
     if (!key) return '(from env)';
-    try {
-        const s = String(key);
-        if (s.length <= 8) return '****';
-        return s.slice(0, 4) + '...' + s.slice(-4);
-    } catch {
-        return '****';
-    }
+    if (key.length <= 8) return '****';
+    return key.slice(0, 4) + '...' + key.slice(-4);
 }
 
 export function truncate(s: string | undefined | null, max = 1000) {
-    if (s === undefined || s === null) return String(s);
-    const str = String(s);
-    return str.length > max ? str.slice(0, max) + '...[truncated]' : str;
+    if (!s) return '';
+    return s.length > max ? s.slice(0, max) + '...[truncated]' : s;
 }
 
-export function safeStringify(obj: any, max = 2000) {
+export function safeStringify(obj: unknown, max = 2000) {
     try {
         const s = JSON.stringify(obj, null, 2);
         return s.length > max ? s.slice(0, max) + '...[truncated]' : s;
@@ -30,7 +24,7 @@ export function safeStringify(obj: any, max = 2000) {
 
 export function logBeforeLLM(
     route: string,
-    body: any,
+    body: { apiKey?: string; model?: string; kind?: string; workInProgress?: boolean; hasPageLimit?: boolean; file?: { name?: string; type?: string } },
     callMeta: { modelId: string; systemPrompt?: string; promptSummary?: string }
 ) {
     const fileInfo = body?.file
