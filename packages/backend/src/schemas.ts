@@ -1,28 +1,34 @@
 import { t } from 'elysia';
 import { z } from 'zod';
 
+// ─── Shared schema constants ──────────────────────────────────────────────────
+
+const modelSchema = t.Union([t.Literal('pro'), t.Literal('flash')]);
+
+const paperKindSchema = t.Union([
+    t.Literal('short conference paper'),
+    t.Literal('full conference paper'),
+    t.Literal('journal paper'),
+    t.Literal('bachelor thesis'),
+    t.Literal('master thesis'),
+    t.Literal('university seminar paper'),
+]);
+
 // ─── Request body schemas ─────────────────────────────────────────────────────
 
 export const sectionsBodySchema = t.Object({
     apiKey: t.Optional(t.String()),
-    model: t.Union([t.Literal('pro'), t.Literal('flash')]),
-    file: t.File(),
+    model: modelSchema,
+    file: t.File({ format: ['image', 'text', 'application/pdf', '.tex'] }),
 });
 
 export type SectionsBody = typeof sectionsBodySchema.static;
 
 export const reviewBodySchema = t.Object({
     apiKey: t.Optional(t.String()),
-    model: t.Union([t.Literal('pro'), t.Literal('flash')]),
-    file: t.File(),
-    kind: t.Union([
-        t.Literal('short conference paper'),
-        t.Literal('full conference paper'),
-        t.Literal('journal paper'),
-        t.Literal('bachelor thesis'),
-        t.Literal('master thesis'),
-        t.Literal('university seminar paper'),
-    ]),
+    model: modelSchema,
+    file: t.File({ format: ['image', 'text', 'application/pdf', '.tex'] }),
+    kind: paperKindSchema,
     customSystemPrompt: t.Optional(t.String()),
     customMessagePart: t.Optional(t.String()),
     workInProgress: t.Optional(t.BooleanString()),
@@ -35,20 +41,13 @@ export type ReviewBody = typeof reviewBodySchema.static;
 
 export const analysisBodySchema = t.Object({
     apiKey: t.Optional(t.String()),
-    model: t.Union([t.Literal('pro'), t.Literal('flash')]),
+    model: modelSchema,
     file: t.File({ format: ['image', 'text', 'application/pdf', '.tex'] }),
     hasPageLimit: t.Optional(t.BooleanString()),
     pageLimit: t.Optional(t.String()),
     currentPages: t.Optional(t.String()),
     workInProgress: t.Optional(t.BooleanString()),
-    kind: t.Union([
-        t.Literal('short conference paper'),
-        t.Literal('full conference paper'),
-        t.Literal('journal paper'),
-        t.Literal('bachelor thesis'),
-        t.Literal('master thesis'),
-        t.Literal('university seminar paper'),
-    ]),
+    kind: paperKindSchema,
     customSystemPrompt: t.Optional(t.String()),
     customMessagePart: t.Optional(t.String()),
 });
@@ -57,21 +56,14 @@ export type AnalysisBody = typeof analysisBodySchema.static;
 
 export const sectionAnalysisBodySchema = t.Object({
     apiKey: t.Optional(t.String()),
-    model: t.Union([t.Literal('pro'), t.Literal('flash')]),
+    model: modelSchema,
     file: t.File({ format: ['image', 'text', 'application/pdf', '.tex'] }),
     hasPageLimit: t.Optional(t.BooleanString()),
     pageLimit: t.Optional(t.String()),
     currentPages: t.Optional(t.String()),
     sectionTitle: t.String(),
     workInProgress: t.Optional(t.BooleanString()),
-    kind: t.Union([
-        t.Literal('short conference paper'),
-        t.Literal('full conference paper'),
-        t.Literal('journal paper'),
-        t.Literal('bachelor thesis'),
-        t.Literal('master thesis'),
-        t.Literal('university seminar paper'),
-    ]),
+    kind: paperKindSchema,
     customSystemPrompt: t.Optional(t.String()),
     customMessagePart: t.Optional(t.String()),
 });
