@@ -20,7 +20,8 @@ export const reviewRoutes = new Elysia()
             const customSys = normalizePrompt(body.customSystemPrompt);
             const systemPrompt = customSys ?? getReviewSystemPrompt(body);
             const customMsg = normalizePrompt(body.customMessagePart);
-            const promptSummary = customMsg ?? getReviewMessagePart(body).text;
+            const msgPart = getReviewMessagePart(body);
+            const promptSummary = customMsg ?? msgPart.text;
 
             logBeforeLLM(route, body, { modelId, systemPrompt, promptSummary });
 
@@ -33,7 +34,7 @@ export const reviewRoutes = new Elysia()
                         content: [
                             customMsg
                                 ? { type: 'text', text: customMsg }
-                                : getReviewMessagePart(body),
+                                : msgPart,
                             await createFileOrImageMessagePart(body.file),
                         ],
                     },
@@ -58,7 +59,8 @@ export const reviewRoutes = new Elysia()
             const customSys = normalizePrompt(body.customSystemPrompt);
             const systemPrompt = customSys ?? getAseSystemPrompt(body);
             const customMsg = normalizePrompt(body.customMessagePart);
-            const promptSummary = customMsg ?? getAseMessagePart().text;
+            const msgPart = getAseMessagePart();
+            const promptSummary = customMsg ?? msgPart.text;
 
             logBeforeLLM(route, body, { modelId, systemPrompt, promptSummary });
 
@@ -71,7 +73,7 @@ export const reviewRoutes = new Elysia()
                         content: [
                             customMsg
                                 ? { type: 'text', text: customMsg }
-                                : getAseMessagePart(),
+                                : msgPart,
                             await createFileOrImageMessagePart(body.file),
                         ],
                     },

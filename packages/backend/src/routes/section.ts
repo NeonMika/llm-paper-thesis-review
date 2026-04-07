@@ -20,7 +20,8 @@ export const sectionRoutes = new Elysia()
             const customSys = normalizePrompt(body.customSystemPrompt);
             const systemPrompt = customSys ?? getSectionAnalysisSystemPrompt(body);
             const customMsg = normalizePrompt(body.customMessagePart);
-            const promptSummary = customMsg ?? getSectionAnalysisMessagePart(body).text;
+            const msgPart = getSectionAnalysisMessagePart(body);
+            const promptSummary = customMsg ?? msgPart.text;
 
             logBeforeLLM(route, body, { modelId, systemPrompt, promptSummary });
 
@@ -33,7 +34,7 @@ export const sectionRoutes = new Elysia()
                         content: [
                             customMsg
                                 ? { type: 'text', text: customMsg }
-                                : getSectionAnalysisMessagePart(body),
+                                : msgPart,
                             await createFileOrImageMessagePart(body.file),
                         ],
                     },

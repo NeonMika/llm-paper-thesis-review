@@ -19,7 +19,8 @@ export const analysisRoutes = new Elysia()
             const customSys = normalizePrompt(body.customSystemPrompt);
             const systemPrompt = customSys ?? getOverallAnalysisSystemPrompt(body);
             const customMsg = normalizePrompt(body.customMessagePart);
-            const promptSummary = customMsg ?? getOverallGeneralAnalysisMessagePart(body).text;
+            const msgPart = getOverallGeneralAnalysisMessagePart(body);
+            const promptSummary = customMsg ?? msgPart.text;
 
             logBeforeLLM(route, body, { modelId, systemPrompt, promptSummary });
 
@@ -32,7 +33,7 @@ export const analysisRoutes = new Elysia()
                         content: [
                             customMsg
                                 ? { type: 'text', text: customMsg }
-                                : getOverallGeneralAnalysisMessagePart(body),
+                                : msgPart,
                             await createFileOrImageMessagePart(body.file),
                         ],
                     },
@@ -57,7 +58,8 @@ export const analysisRoutes = new Elysia()
             const customSys = normalizePrompt(body.customSystemPrompt);
             const systemPrompt = customSys ?? getOverallAnalysisSystemPrompt(body);
             const customMsg = normalizePrompt(body.customMessagePart);
-            const promptSummary = customMsg ?? getOverallDetailedAnalysisMessagePart(body).text;
+            const msgPart = getOverallDetailedAnalysisMessagePart(body);
+            const promptSummary = customMsg ?? msgPart.text;
 
             logBeforeLLM(route, body, { modelId, systemPrompt, promptSummary });
 
@@ -70,7 +72,7 @@ export const analysisRoutes = new Elysia()
                         content: [
                             customMsg
                                 ? { type: 'text', text: customMsg }
-                                : getOverallDetailedAnalysisMessagePart(body),
+                                : msgPart,
                             await createFileOrImageMessagePart(body.file),
                         ],
                     },
