@@ -6,13 +6,6 @@ import App from '../App.vue'
 vi.mock('../api', () => ({
   default: {
     sections_system_prompt: { get: vi.fn().mockResolvedValue({ data: '', error: null }) },
-    overall_analysis_system_prompt: { post: vi.fn().mockResolvedValue({ data: '', error: null }) },
-    overall_general_analysis_message_part: { post: vi.fn().mockResolvedValue({ data: '', error: null }) },
-    overall_detailed_analysis_message_part: { post: vi.fn().mockResolvedValue({ data: '', error: null }) },
-    review_system_prompt: { post: vi.fn().mockResolvedValue({ data: '', error: null }) },
-    review_message_part: { post: vi.fn().mockResolvedValue({ data: '', error: null }) },
-    ase_system_prompt: { post: vi.fn().mockResolvedValue({ data: '', error: null }) },
-    ase_message_part: { post: vi.fn().mockResolvedValue({ data: '', error: null }) },
   },
 }))
 
