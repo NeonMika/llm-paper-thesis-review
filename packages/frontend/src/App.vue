@@ -60,8 +60,8 @@ function isValidationHint(error: unknown): boolean {
 </script>
 
 <template>
-  <div class="p-grid p-justify-center">
-    <div class="p-col-12 p-md-8">
+  <div class="page-layout">
+    <div class="page-content">
 
       <h1>Paper & Thesis Review Tool</h1>
 
@@ -175,7 +175,7 @@ function isValidationHint(error: unknown): boolean {
 
           <h3>Paper Text</h3>
 
-          <div v-if="paperStore.loadingContent" class="p-d-flex p-jc-center p-ai-center" style="height: 150px">
+          <div v-if="paperStore.loadingContent" class="flex-center" style="height: 150px">
             <ProgressSpinner />
           </div>
           <p v-else-if="!paperStore.content">Load a paper for analysis.</p>
@@ -200,7 +200,7 @@ function isValidationHint(error: unknown): boolean {
             <strong>System Prompt:</strong><br />
             <pre v-if="promptStore.sectionsSystemPrompt" class="prompt-pre">{{ promptStore.sectionsSystemPrompt }}</pre>
             <strong>Result:</strong><br />
-            <div v-if="paperStore.loadingSections" class="p-d-flex p-jc-center p-ai-center" style="height: 150px">
+            <div v-if="paperStore.loadingSections" class="flex-center" style="height: 150px">
               <ProgressSpinner />
             </div>
             <p v-else-if="paperStore.sections.length === 0">
@@ -209,7 +209,7 @@ function isValidationHint(error: unknown): boolean {
             <ul v-else>
               <li v-for="(section, index) in paperStore.sections" :key="index">
                 <span v-if="section.sectionNumber">{{ section.sectionNumber }}. </span>{{ section.title }}
-                <Card class="card p-mb-2 p-mt-2">
+                <Card class="card section-card">
                   <template #content>
                     <div>
                       <strong>System Prompt:</strong><br />
@@ -219,7 +219,7 @@ function isValidationHint(error: unknown): boolean {
                       <pre v-if="promptStore.sectionAnalysisMessagePart[section.title]"
                         class="prompt-pre">{{ promptStore.sectionAnalysisMessagePart[section.title] }}</pre>
                       <strong>Result:</strong><br />
-                      <div v-if="paperStore.isLoadingSectionAnalysis(section.title)" class="p-d-flex p-jc-center p-ai-center" style="height: 150px">
+                      <div v-if="paperStore.isLoadingSectionAnalysis(section.title)" class="flex-center" style="height: 150px">
                         <ProgressSpinner />
                       </div>
                       <div v-else class="result-div" v-html="section.analysis ? marked.parse(section.analysis) : ''"></div>
@@ -233,7 +233,7 @@ function isValidationHint(error: unknown): boolean {
               </li>
             </ul>
           </div>
-          <Button @click="paperStore.getSectionTitles" :disabled="paperStore.loading || !paperStore.content || !paperStore.paperType" class="p-mt-3">
+          <Button @click="paperStore.getSectionTitles" :disabled="paperStore.loading || !paperStore.content || !paperStore.paperType" class="mt-3">
             Extract Sections
           </Button>
         </template>
@@ -243,8 +243,15 @@ function isValidationHint(error: unknown): boolean {
 </template>
 
 <style scoped>
-.p-grid {
-  margin: 0;
+.page-layout {
+  display: flex;
+  justify-content: center;
+  padding: 1.5rem;
+}
+
+.page-content {
+  width: 100%;
+  max-width: 900px;
 }
 
 #paper-content {
@@ -366,20 +373,13 @@ strong {
   letter-spacing: 0.01em;
 }
 
-.p-mt-3 {
-  margin-top: 1.5em !important;
+.mt-3 {
+  margin-top: 1.5em;
 }
 
-.p-mb-3 {
-  margin-bottom: 1.5em !important;
-}
-
-.p-mb-2 {
-  margin-bottom: 1em !important;
-}
-
-.p-mt-2 {
-  margin-top: 1em !important;
+.section-card {
+  margin-top: 1em;
+  margin-bottom: 1em;
 }
 
 .form-group {
@@ -638,15 +638,9 @@ li {
   color: #fff;
 }
 
-.p-d-flex {
+.flex-center {
   display: flex;
-}
-
-.p-jc-center {
   justify-content: center;
-}
-
-.p-ai-center {
   align-items: center;
 }
 </style>
