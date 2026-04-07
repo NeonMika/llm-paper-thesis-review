@@ -1,3 +1,4 @@
+/// <reference types="bun-types" />
 import {Elysia, t} from 'elysia'
 import {swagger} from '@elysiajs/swagger'
 import {cors} from '@elysiajs/cors'
@@ -95,29 +96,6 @@ type SectionAnalysisBody = typeof sectionAnalysisBodySchema.static;
 
 // Response schemas
 
-const sectionSchema = t.Object({
-    title: t.String(),
-    sectionNumber: t.Optional(t.String()),
-    subsections: t.Optional(
-        t.Array(
-            // Subsection level
-            t.Object({
-                title: t.String(),
-                subsectionNumber: t.Optional(t.String()),
-                subsubsections: t.Optional(
-                    t.Array(
-                        // Subsubsection level
-                        t.Object({
-                            title: t.String(),
-                            subsubsectionNumber: t.Optional(t.String()),
-                        })
-                    )
-                )
-            })
-        )
-    )
-})
-
 const zSectionSchema =
     // Section level
     z.object({
@@ -139,7 +117,7 @@ const zSectionSchema =
         ).optional(),
     })
 
-type Section = typeof sectionSchema.static;
+type Section = z.infer<typeof zSectionSchema>;
 
 async function createFileOrImageMessagePart(file: File): Promise<ImagePart | FilePart> {
     let mediaType;
@@ -595,12 +573,12 @@ function logBeforeLLM(route: string, body: any, callMeta: { modelId: string, sys
 }
 
 // Make this async so we can read response bodies if necessary
-function logAfterLLM(route: string, result: { text?: string; object?: unknown; usage?: { promptTokens?: number; completionTokens?: number }; finishReason?: string }) {
+function logAfterLLM(route: string, result: { text?: string; object?: unknown; usage?: { inputTokens?: number; outputTokens?: number }; finishReason?: string }) {
     console.log(
         `[LLM CALL END] route=${route}`,
         `finishReason=${result.finishReason ?? 'unknown'}`,
-        `promptTokens=${result.usage?.promptTokens ?? '?'}`,
-        `completionTokens=${result.usage?.completionTokens ?? '?'}`,
+        `inputTokens=${result.usage?.inputTokens ?? '?'}`,
+        `outputTokens=${result.usage?.outputTokens ?? '?'}`,
         `outputLength=${result.text ? String(result.text).length : result.object ? JSON.stringify(result.object).length : 0}`
     )
 }
@@ -822,7 +800,7 @@ const app = new Elysia({
     }, {
         parse: 'multipart/form-data', // According to https://github.com/elysiajs/elysia/discussions/676
         body: sectionsBodySchema,
-        response: t.Array(sectionSchema),
+        response: t.Array(t.Any()),
     })
     .post("/overall_analysis_system_prompt", ({body}) => {
         return getOverallAnalysisSystemPrompt(body);
@@ -845,9 +823,11 @@ const app = new Elysia({
         body: analysisBodySchema,
         response: t.String(),
     })
-    .post("/review_system_prompt", () => {
+    .post("/review_system_prompt", ({body}) => {
         return getReviewSystemPrompt(body);
     }, {
+        parse: 'multipart/form-data',
+        body: reviewBodySchema,
         response: t.String(),
     })
     .post("/review_message_part", ({body}) => {
@@ -875,9 +855,11 @@ const app = new Elysia({
     }, {
         response: t.String(),
     })
-    .post("/ase_system_prompt", () => {
+    .post("/ase_system_prompt", ({body}) => {
         return getAseSystemPrompt(body);
     }, {
+        parse: 'multipart/form-data',
+        body: reviewBodySchema,
         response: t.String(),
     })
     .post("/ase_message_part", () => {
