@@ -1,7 +1,7 @@
 import { Elysia, t } from 'elysia';
-import { generateText } from 'ai';
+import { generateText, type CoreUserMessage, type CoreAssistantMessage, type UserContent } from 'ai';
 import { followUpBodySchema } from '../schemas.ts';
-import { getNewFileFollowUpInstruction } from '../prompts.ts';
+import { NEW_FILE_FOLLOW_UP_INSTRUCTION } from '../prompts.ts';
 import { google, getModelFromBody } from '../utils/model.ts';
 import { createFileOrImageMessagePart } from '../utils/fileHelpers.ts';
 import { logBeforeLLM, logAfterLLM } from '../utils/logging.ts';
@@ -19,9 +19,9 @@ export const followUpRoutes = new Elysia().post(
             throw new Error('Invalid conversationHistory JSON');
         }
 
-        const newUserContent: any[] = [];
+        const newUserContent: UserContent = [];
         if (body.newFile) {
-            const instruction = body.textMessage?.trim() || getNewFileFollowUpInstruction();
+            const instruction = body.textMessage?.trim() || NEW_FILE_FOLLOW_UP_INSTRUCTION;
             newUserContent.push({ type: 'text', text: instruction });
             newUserContent.push(await createFileOrImageMessagePart(body.newFile));
         } else if (body.textMessage && body.textMessage.trim()) {
@@ -30,7 +30,7 @@ export const followUpRoutes = new Elysia().post(
             throw new Error('Either newFile or textMessage must be provided');
         }
 
-        const messages: any[] = [
+        const messages: (CoreUserMessage | CoreAssistantMessage)[] = [
             ...history.map((m) => ({ role: m.role, content: m.content })),
             { role: 'user', content: newUserContent },
         ];
