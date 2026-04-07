@@ -208,7 +208,7 @@ function isValidationHint(error: unknown): boolean {
             </p>
             <ul v-else>
               <li v-for="(section, index) in paperStore.sections" :key="index">
-                {{ section.sectionNumber ?? '#' }}. {{ section.title }}
+                <span v-if="section.sectionNumber">{{ section.sectionNumber }}. </span>{{ section.title }}
                 <Card class="card p-mb-2 p-mt-2">
                   <template #content>
                     <div>
@@ -223,7 +223,6 @@ function isValidationHint(error: unknown): boolean {
                         <ProgressSpinner />
                       </div>
                       <div v-else class="result-div" v-html="section.analysis ? marked.parse(section.analysis) : ''"></div>
-                      <pre class="result-div" v-if="section.analysis">{{ section.analysis }}</pre>
                       <Button @click="paperStore.enrichWithSectionAnalysis(section.title)" :disabled="paperStore.loading">Perform Section Analysis
                       </Button>
                     </div>
@@ -244,13 +243,6 @@ function isValidationHint(error: unknown): boolean {
 <style scoped>
 .p-grid {
   margin: 0;
-}
-
-:global(body) {
-  background: linear-gradient(135deg, #f5f7fa 0%, #e5e7eb 100%);
-  min-height: 100vh;
-  font-family: 'Segoe UI', 'Roboto', 'Arial', sans-serif;
-  color: #1f2937;
 }
 
 #paper-content {
