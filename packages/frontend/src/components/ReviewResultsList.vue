@@ -208,7 +208,7 @@ import Card from 'primevue/card'
 import Button from 'primevue/button'
 import { marked } from 'marked'
 import { usePaperStore } from '../stores/paperStore'
-import { DEFAULT_FILE_FOLLOW_UP_INSTRUCTION, REVIEW_TYPE_LABELS } from '../constants'
+import { DEFAULT_FILE_FOLLOW_UP_INSTRUCTION, REVIEW_TYPE_LABELS, type ReviewType } from '../constants'
 
 const paperStore = usePaperStore()
 
@@ -258,7 +258,7 @@ function togglePromptExpand(reviewId: string, type: 'system' | 'message') {
 }
 
 function getReviewTypeLabel(type: string): string {
-  return REVIEW_TYPE_LABELS[type] || type
+  return REVIEW_TYPE_LABELS[type as ReviewType] ?? type
 }
 
 function formatDate(date: Date): string {
