@@ -3,6 +3,16 @@ import { defineStore } from 'pinia'
 
 import api from '../api'
 import type { Section } from '../../../backend/src'
+import { DEFAULT_FILE_FOLLOW_UP_INSTRUCTION } from '../constants'
+
+export interface FollowUp {
+  id: string
+  timestamp: Date
+  mode: 'file' | 'text'
+  fileName?: string
+  userMessage: string
+  response: string
+}
 
 export interface Review {
   id: string
@@ -13,6 +23,7 @@ export interface Review {
   timestamp: Date
   fileName: string
   fileContentPreview: string
+  followUps: FollowUp[]
 }
 
 export const usePaperStore = defineStore('paper', () => {
@@ -79,7 +90,11 @@ export const usePaperStore = defineStore('paper', () => {
         // Convert timestamp strings back to Date objects
         reviews.value = parsed.map((r: Review) => ({
           ...r,
-          timestamp: new Date(r.timestamp)
+          timestamp: new Date(r.timestamp),
+          followUps: (r.followUps ?? []).map((f: FollowUp) => ({
+            ...f,
+            timestamp: new Date(f.timestamp)
+          }))
         }))
       }
     } catch (error) {
@@ -137,7 +152,8 @@ export const usePaperStore = defineStore('paper', () => {
       result,
       timestamp: new Date(),
       fileName: file.value?.name || 'Unknown file',
-      fileContentPreview
+      fileContentPreview,
+      followUps: []
     }
 
     // Add to beginning (newest first)
@@ -311,6 +327,69 @@ export const usePaperStore = defineStore('paper', () => {
     sections.value.find((section) => section.title === sectionTitle)!.analysis = data
   }
 
+  async function sendFollowUpRequest(
+    reviewId: string,
+    options: { mode: 'file' | 'text'; file?: File; textMessage?: string }
+  ): Promise<void> {
+    const review = reviews.value.find(r => r.id === reviewId)
+    if (!review) throw new Error('Review not found')
+
+    // Build text-only conversation history from the review's conversation so far
+    const history: { role: 'user' | 'assistant'; content: string }[] = [
+      { role: 'user', content: review.messagePart },
+      { role: 'assistant', content: review.result },
+    ]
+    for (const followUp of review.followUps) {
+      history.push({ role: 'user', content: followUp.userMessage })
+      history.push({ role: 'assistant', content: followUp.response })
+    }
+
+    // Always use FormData so the server's multipart/form-data parser never rejects the request,
+    // regardless of whether a file is attached (Eden treaty sends JSON when no File is present).
+    const formData = new FormData()
+    formData.append('apiKey', apiKey.value || '')
+    formData.append('model', model.value)
+    formData.append('systemPrompt', review.systemPrompt)
+    formData.append('conversationHistory', JSON.stringify(history))
+
+    if (options.mode === 'file' && options.file) {
+      formData.append('newFile', options.file)
+      if (options.textMessage?.trim()) {
+        formData.append('textMessage', options.textMessage)
+      }
+    } else if (options.mode === 'text' && options.textMessage?.trim()) {
+      formData.append('textMessage', options.textMessage)
+    } else {
+      throw new Error('Either a file or a text message must be provided')
+    }
+
+    const response = await fetch('http://localhost:3000/follow_up', {
+      method: 'POST',
+      body: formData,
+    })
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      throw new Error(`Request failed (${response.status}): ${errorText}`)
+    }
+
+    const responseText = await response.text()
+
+    const followUp: FollowUp = {
+      id: crypto.randomUUID(),
+      timestamp: new Date(),
+      mode: options.mode,
+      fileName: options.mode === 'file' ? options.file?.name : undefined,
+      userMessage: options.mode === 'text'
+        ? (options.textMessage ?? '')
+        : (options.textMessage?.trim() || DEFAULT_FILE_FOLLOW_UP_INSTRUCTION),
+      response: responseText,
+    }
+
+    review.followUps.push(followUp)
+    saveReviewsToStorage()
+  }
+
   // Computed property "loaded" is true if any loading boolean is true
   const loading = computed(() => {
     return (
@@ -355,6 +434,7 @@ export const usePaperStore = defineStore('paper', () => {
     addReview,
     deleteReview,
     clearAllReviews,
+    sendFollowUpRequest,
 
     // Errors
     sectionsError,

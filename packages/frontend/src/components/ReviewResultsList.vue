@@ -86,6 +86,103 @@
               </div>
               <div v-else class="result-content" v-html="marked.parse(review.result)"></div>
             </div>
+
+            <!-- Follow-up Conversation Thread -->
+            <div v-for="followUp in review.followUps" :key="followUp.id" class="follow-up-thread">
+              <!-- User turn -->
+              <div class="thread-turn user-turn">
+                <div class="turn-header">
+                  <span class="turn-badge" :class="followUp.mode === 'file' ? 'badge-file' : 'badge-text'">
+                    {{ followUp.mode === 'file' ? '📄 New File Version' : '💬 Text Follow-Up' }}
+                  </span>
+                  <span class="turn-meta">{{ formatDate(followUp.timestamp) }}</span>
+                </div>
+                <div class="turn-content user-content">
+                  <strong v-if="followUp.fileName">{{ followUp.fileName }}</strong>
+                  <p class="user-message">{{ followUp.userMessage }}</p>
+                </div>
+              </div>
+
+              <!-- Assistant turn -->
+              <div class="thread-turn assistant-turn">
+                <div class="turn-header">
+                  <span class="turn-badge badge-assistant">🤖 Response</span>
+                  <div class="header-with-button">
+                    <button class="toggle-button" @click="toggleFollowUpFormat(followUp.id)">
+                      {{ isFollowUpMarkdown(followUp.id) ? '▼ Show Formatted' : '▶ Show Markdown' }}
+                    </button>
+                    <button v-if="isFollowUpMarkdown(followUp.id)" class="toggle-button" @click="copyMarkdown(followUp.response)">
+                      📋 Copy
+                    </button>
+                  </div>
+                </div>
+                <div v-if="isFollowUpMarkdown(followUp.id)" class="result-markdown">
+                  <pre>{{ followUp.response }}</pre>
+                </div>
+                <div v-else class="result-content" v-html="marked.parse(followUp.response)"></div>
+              </div>
+            </div>
+
+            <!-- Follow-up Input Section -->
+            <div class="follow-up-section">
+              <h4 class="follow-up-title">Add Follow-Up</h4>
+
+              <!-- Mode Selector -->
+              <div class="mode-selector">
+                <button
+                  class="mode-button"
+                  :class="{ active: getFollowUpMode(review.id) === 'text' }"
+                  @click="setFollowUpMode(review.id, 'text')"
+                >💬 Text Message</button>
+                <button
+                  class="mode-button"
+                  :class="{ active: getFollowUpMode(review.id) === 'file' }"
+                  @click="setFollowUpMode(review.id, 'file')"
+                >📄 New File Version</button>
+              </div>
+
+              <!-- Text mode -->
+              <template v-if="getFollowUpMode(review.id) === 'text'">
+                <textarea
+                  v-model="getFollowUpState(review.id).textMessage"
+                  rows="4"
+                  class="follow-up-textarea"
+                  placeholder="e.g. I improved Section 3 as follows: ..."
+                />
+              </template>
+
+              <!-- File mode -->
+              <template v-else>
+                <div class="file-mode-inputs">
+                  <label class="file-input-label">
+                    <span>Select revised paper file:</span>
+                    <input type="file" class="hidden-file-input" @change="onFollowUpFileChange(review.id, $event)" />
+                  </label>
+                  <span v-if="getFollowUpState(review.id).file" class="selected-file-name">
+                    ✓ {{ getFollowUpState(review.id).file!.name }}
+                  </span>
+                  <label class="textarea-label">Instruction for the reviewer (optional):</label>
+                  <textarea
+                    v-model="getFollowUpState(review.id).fileInstruction"
+                    rows="3"
+                    class="follow-up-textarea"
+                    :placeholder="DEFAULT_FILE_FOLLOW_UP_INSTRUCTION"
+                  />
+                </div>
+              </template>
+
+              <div class="follow-up-actions">
+                <Button
+                  label="Send Follow-Up"
+                  @click="sendFollowUp(review.id)"
+                  :loading="isFollowUpLoading(review.id)"
+                  :disabled="!canSendFollowUp(review.id)"
+                />
+              </div>
+              <div v-if="getFollowUpError(review.id)" class="error-message">
+                {{ getFollowUpError(review.id) }}
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -106,11 +203,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, reactive } from 'vue'
 import Card from 'primevue/card'
 import Button from 'primevue/button'
 import { marked } from 'marked'
 import { usePaperStore } from '../stores/paperStore'
+import { DEFAULT_FILE_FOLLOW_UP_INSTRUCTION, REVIEW_TYPE_LABELS } from '../constants'
 
 const paperStore = usePaperStore()
 
@@ -160,13 +258,7 @@ function togglePromptExpand(reviewId: string, type: 'system' | 'message') {
 }
 
 function getReviewTypeLabel(type: string): string {
-  const labels: Record<string, string> = {
-    'analysis': 'Paper Analysis (General)',
-    'analysis-detailed': 'Paper Analysis (Detailed)',
-    'review': 'Paper Review',
-    'ase-review': 'ASE Paper Review'
-  }
-  return labels[type] || type
+  return REVIEW_TYPE_LABELS[type] || type
 }
 
 function formatDate(date: Date): string {
@@ -231,6 +323,95 @@ async function copyMarkdown(markdown: string) {
     // Could add a toast notification here if desired
   } catch (err) {
     console.error('Failed to copy markdown:', err)
+  }
+}
+
+// --- Follow-up state ---
+
+interface FollowUpState {
+  mode: 'file' | 'text'
+  file: File | null
+  fileInstruction: string
+  textMessage: string
+}
+
+const followUpStates = reactive<Record<string, FollowUpState>>({})
+const followUpLoading = reactive<Record<string, boolean>>({})
+const followUpErrors = reactive<Record<string, string>>({})
+const followUpMarkdownMap = reactive<Record<string, boolean>>({})
+
+function getFollowUpState(reviewId: string): FollowUpState {
+  if (!followUpStates[reviewId]) {
+    followUpStates[reviewId] = {
+      mode: 'text',
+      file: null,
+      fileInstruction: '',
+      textMessage: ''
+    }
+  }
+  return followUpStates[reviewId]
+}
+
+function getFollowUpMode(reviewId: string): 'file' | 'text' {
+  return getFollowUpState(reviewId).mode
+}
+
+function setFollowUpMode(reviewId: string, mode: 'file' | 'text') {
+  getFollowUpState(reviewId).mode = mode
+}
+
+function onFollowUpFileChange(reviewId: string, event: Event) {
+  const input = event.target as HTMLInputElement
+  getFollowUpState(reviewId).file = input.files?.[0] ?? null
+}
+
+function isFollowUpLoading(reviewId: string): boolean {
+  return followUpLoading[reviewId] || false
+}
+
+function getFollowUpError(reviewId: string): string {
+  return followUpErrors[reviewId] || ''
+}
+
+function canSendFollowUp(reviewId: string): boolean {
+  const state = getFollowUpState(reviewId)
+  if (state.mode === 'file') return !!state.file
+  return !!(state.textMessage?.trim())
+}
+
+function isFollowUpMarkdown(followUpId: string): boolean {
+  return followUpMarkdownMap[followUpId] || false
+}
+
+function toggleFollowUpFormat(followUpId: string) {
+  followUpMarkdownMap[followUpId] = !followUpMarkdownMap[followUpId]
+}
+
+async function sendFollowUp(reviewId: string) {
+  const state = getFollowUpState(reviewId)
+  followUpLoading[reviewId] = true
+  followUpErrors[reviewId] = ''
+
+  try {
+    if (state.mode === 'file' && state.file) {
+      await paperStore.sendFollowUpRequest(reviewId, {
+        mode: 'file',
+        file: state.file,
+        textMessage: state.fileInstruction || undefined
+      })
+      state.file = null
+      state.fileInstruction = ''
+    } else if (state.mode === 'text') {
+      await paperStore.sendFollowUpRequest(reviewId, {
+        mode: 'text',
+        textMessage: state.textMessage
+      })
+      state.textMessage = ''
+    }
+  } catch (err) {
+    followUpErrors[reviewId] = `Failed to send follow-up: ${err}`
+  } finally {
+    followUpLoading[reviewId] = false
   }
 }
 </script>
@@ -534,5 +715,188 @@ async function copyMarkdown(markdown: string) {
 
 .modal-button.primary:hover {
   background: #b91c1c;
+}
+
+/* Follow-up thread styles */
+.follow-up-thread {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  border-left: 3px solid #bfdbfe;
+  padding-left: 1rem;
+  margin-top: 0.5rem;
+}
+
+.thread-turn {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.turn-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.turn-badge {
+  display: inline-block;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.badge-text {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.badge-file {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.badge-assistant {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.turn-meta {
+  font-size: 0.8rem;
+  color: #9ca3af;
+}
+
+.user-content {
+  padding: 0.6rem 0.85rem;
+  background: #f0f9ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.user-message {
+  margin: 0;
+  font-size: 0.95rem;
+  color: #1e3a5f;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+/* Follow-up input section */
+.follow-up-section {
+  border-top: 2px dashed #e5e7eb;
+  padding-top: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.follow-up-title {
+  margin: 0;
+  font-size: 1rem;
+  color: #374151;
+}
+
+.mode-selector {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.mode-button {
+  padding: 0.4rem 0.9rem;
+  border: 1.5px solid #d1d5db;
+  border-radius: 6px;
+  background: white;
+  cursor: pointer;
+  font-size: 0.85rem;
+  color: #6b7280;
+  transition: all 0.15s;
+}
+
+.mode-button:hover {
+  border-color: #93c5fd;
+  color: #1e40af;
+}
+
+.mode-button.active {
+  border-color: #3b82f6;
+  background: #eff6ff;
+  color: #1e40af;
+  font-weight: 600;
+}
+
+.follow-up-textarea {
+  width: 100%;
+  padding: 0.6rem 0.75rem;
+  border: 1.5px solid #d1d5db;
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 0.95rem;
+  resize: vertical;
+  box-sizing: border-box;
+  color: #1f2937;
+  transition: border-color 0.15s;
+}
+
+.follow-up-textarea:focus {
+  outline: none;
+  border-color: #60a5fa;
+}
+
+.file-mode-inputs {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.file-input-label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.9rem;
+  color: #374151;
+}
+
+.hidden-file-input {
+  width: 100%;
+  padding: 0.4rem;
+  border: 1.5px dashed #d1d5db;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+.hidden-file-input:hover {
+  border-color: #93c5fd;
+}
+
+.selected-file-name {
+  font-size: 0.85rem;
+  color: #166534;
+  font-weight: 500;
+}
+
+.textarea-label {
+  font-size: 0.85rem;
+  color: #6b7280;
+}
+
+.follow-up-actions {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.error-message {
+  padding: 0.5rem 0.75rem;
+  background: #fef2f2;
+  border: 1px solid #fca5a5;
+  border-radius: 6px;
+  color: #dc2626;
+  font-size: 0.9rem;
 }
 </style>
