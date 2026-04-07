@@ -26,6 +26,12 @@ export interface Review {
   followUps: FollowUp[]
 }
 
+// Centralized list of text file extensions (previewable/readable as text)
+const TEXT_FILE_EXTENSIONS = [
+  '.txt', '.tex', '.md', '.html', '.css', '.js', '.ts',
+  '.py', '.java', '.c', '.cpp', '.h', '.hpp'
+]
+
 export const usePaperStore = defineStore('paper', () => {
   const file = ref<File | null>(null)
 
@@ -34,10 +40,10 @@ export const usePaperStore = defineStore('paper', () => {
 
   type SectionWithAnalysis = Section & { analysis?: string }
   const sections: Ref<SectionWithAnalysis[]> = ref([])
-  const sectionsError = ref<unknown | null>(null)
+  const sectionsError = ref<unknown>(null)
   const loadingSections = ref(false)
 
-  const sectionAnalysisError = ref<unknown | null>(null)
+  const sectionAnalysisError = ref<unknown>(null)
   const loadingSectionAnalysisSet = ref<Set<string>>(new Set())
   const loadingSectionAnalysis = computed(() => loadingSectionAnalysisSet.value.size > 0)
 
@@ -70,12 +76,6 @@ export const usePaperStore = defineStore('paper', () => {
   // Google Gemini Settings
   const apiKey = ref<string>('');
   const model = ref<'pro' | 'flash'>('flash');
-
-  // Centralized list of text file extensions (previewable/readable as text)
-  const TEXT_FILE_EXTENSIONS = [
-    '.txt', '.tex', '.md', '.html', '.css', '.js', '.ts',
-    '.py', '.java', '.c', '.cpp', '.h', '.hpp'
-  ]
 
   function getFileExtension(fileName: string): string {
     const idx = fileName.lastIndexOf('.')
@@ -201,7 +201,6 @@ export const usePaperStore = defineStore('paper', () => {
       content.value = ext
         ? `Text preview not available for ${ext} file`
         : 'Text preview not available for this file'
-      loadingContent.value = false
       return
     }
 
@@ -242,10 +241,21 @@ export const usePaperStore = defineStore('paper', () => {
   ): Promise<string> {
     if (!file.value) throw new Error('File must be selected')
 
-    // Build request bodies conditionally to avoid sending the literal string "undefined"
-    const analysisRequestBody: any = {
+    // Build request body with optional custom prompt fields
+    const requestBody: {
+      file: File
+      apiKey: string
+      model: 'pro' | 'flash'
+      kind: typeof paperType.value
+      workInProgress: boolean
+      hasPageLimit: boolean
+      pageLimit: string
+      currentPages: string
+      customSystemPrompt?: string
+      customMessagePart?: string
+    } = {
       file: file.value,
-      apiKey: apiKey.value || "",
+      apiKey: apiKey.value || '',
       model: model.value,
       kind: paperType.value,
       workInProgress: wip.value,
@@ -254,29 +264,11 @@ export const usePaperStore = defineStore('paper', () => {
       currentPages: currentPages.value + ''
     }
 
-    if (customSystemPrompt !== undefined && customSystemPrompt !== null && String(customSystemPrompt).trim() !== '') {
-      analysisRequestBody.customSystemPrompt = customSystemPrompt
+    if (customSystemPrompt?.trim()) {
+      requestBody.customSystemPrompt = customSystemPrompt
     }
-    if (customMessagePart !== undefined && customMessagePart !== null && String(customMessagePart).trim() !== '') {
-      analysisRequestBody.customMessagePart = customMessagePart
-    }
-
-    const reviewRequestBody: any = {
-      file: file.value,
-      apiKey: apiKey.value || "",
-      model: model.value,
-      kind: paperType.value,
-      workInProgress: wip.value,
-      hasPageLimit: hasPageLimit.value,
-      pageLimit: pageLimit.value + '',
-      currentPages: currentPages.value + '',
-    }
-
-    if (customSystemPrompt !== undefined && customSystemPrompt !== null && String(customSystemPrompt).trim() !== '') {
-      reviewRequestBody.customSystemPrompt = customSystemPrompt
-    }
-    if (customMessagePart !== undefined && customMessagePart !== null && String(customMessagePart).trim() !== '') {
-      reviewRequestBody.customMessagePart = customMessagePart
+    if (customMessagePart?.trim()) {
+      requestBody.customMessagePart = customMessagePart
     }
 
     loadingReview.value = true
@@ -285,28 +277,28 @@ export const usePaperStore = defineStore('paper', () => {
       switch (type) {
         case 'analysis':
           {
-            const { data, error } = await api.overall_analysis_general.post(analysisRequestBody)
+            const { data, error } = await api.overall_analysis_general.post(requestBody)
             if (error) throw error
             result = data
           }
           break
         case 'analysis-detailed':
           {
-            const { data, error } = await api.overall_analysis_detailed.post(analysisRequestBody)
+            const { data, error } = await api.overall_analysis_detailed.post(requestBody)
             if (error) throw error
             result = data
           }
           break
         case 'review':
           {
-            const { data, error } = await api.review.post(reviewRequestBody)
+            const { data, error } = await api.review.post(requestBody)
             if (error) throw error
             result = data
           }
           break
         case 'ase-review':
           {
-            const { data, error } = await api.ase.post(reviewRequestBody)
+            const { data, error } = await api.ase.post(requestBody)
             if (error) throw error
             result = data
           }
@@ -332,9 +324,9 @@ export const usePaperStore = defineStore('paper', () => {
         kind: paperType.value,
         workInProgress: wip.value,
         hasPageLimit: hasPageLimit.value,
-        pageLimit: pageLimit.value + "",
-        currentPages: currentPages.value + "",
-        apiKey: apiKey.value || "",
+        pageLimit: pageLimit.value + '',
+        currentPages: currentPages.value + '',
+        apiKey: apiKey.value || '',
         model: model.value,
       })
       if (error) {
@@ -448,7 +440,6 @@ export const usePaperStore = defineStore('paper', () => {
     loadingContent,
     loadingSections,
     loadingSectionAnalysis,
-    loadingReview,
     isLoadingSectionAnalysis,
 
     // Methods
