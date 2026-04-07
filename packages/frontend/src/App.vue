@@ -310,16 +310,6 @@ form>* {
   font-size: 1em;
 }
 
-.p-hint {
-  background: #fef3c7;
-  color: #92400e;
-  border: 1px solid #fde68a;
-  border-radius: 8px;
-  padding: 0.75em 1em;
-  margin-bottom: 1em;
-  font-size: 1em;
-}
-
 .prompt-pre {
   max-width: 100%;
   max-height: 33vh;
