@@ -52,7 +52,7 @@ onBeforeUnmount(() => {
 function isValidationHint(error: unknown): boolean {
   if (!error) return false
   const errorString = typeof error === 'string' ? error : JSON.stringify(error)
-  return errorString.includes('müssen gesetzt sein') || errorString.includes('must be set')
+  return errorString.includes('must be set')
 }
 </script>
 
@@ -70,7 +70,7 @@ function isValidationHint(error: unknown): boolean {
         <template #content>
           <div class="form-group">
             <label for="apiKey">API Key</label>
-            <input id="apiKey" type="text" v-model="paperStore.apiKey" placeholder="Optional: Own Google API Key" class="p-mb-3" style="width: 100%"
+            <input id="apiKey" type="text" v-model="paperStore.apiKey" placeholder="Optional: Own Google API Key"
               autocomplete="off" />
           </div>
           <p v-if="!paperStore.apiKey">
