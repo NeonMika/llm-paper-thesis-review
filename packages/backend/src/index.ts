@@ -1,4 +1,4 @@
-import {Elysia, sse, t} from 'elysia'
+import {Elysia, t} from 'elysia'
 import {swagger} from '@elysiajs/swagger'
 import {cors} from '@elysiajs/cors'
 
@@ -505,6 +505,21 @@ function getSectionsSystemPrompt() {
     return "Your are given a document that is split into sections. Extract the section titles. Also include sections that do not have a number (e.g., Abstract)";
 }
 
+function getNewFileFollowUpInstruction() {
+    return `I have revised the paper based on your feedback. Here is the updated version. Please evaluate the changes, noting what has improved and whether any issues remain or new ones have emerged.`;
+}
+
+const followUpBodySchema = t.Object({
+    apiKey: t.Optional(t.String()),
+    model: t.Union([t.Literal("pro"), t.Literal("flash")]),
+    systemPrompt: t.String(),
+    conversationHistory: t.String(), // JSON: {role:'user'|'assistant', content:string}[]
+    newFile: t.Optional(t.File()),   // option (a): complete new file version
+    textMessage: t.Optional(t.String()), // option (b): free-text follow-up
+})
+
+type FollowUpBody = typeof followUpBodySchema.static
+
 // Treat common placeholder values as absent so fallbacks work reliably
 function normalizePrompt(value: any): string | undefined {
     if (value === undefined || value === null) return undefined;
@@ -517,22 +532,7 @@ function normalizePrompt(value: any): string | undefined {
     return value;
 }
 
-// Hilfsfunktion für Literal-Typen
-function parseKind(kind: string | undefined): "short conference paper" | "full conference paper" | "journal paper" | "bachelor thesis" | "master thesis" | "university seminar paper" {
-    if (
-        kind === "short conference paper" ||
-        kind === "full conference paper" ||
-        kind === "journal paper" ||
-        kind === "bachelor thesis" ||
-        kind === "master thesis" ||
-        kind === "university seminar paper"
-    ) {
-        return kind;
-    }
-    return "full conference paper";
-}
-
-// Hilfsfunktion für Modellwahl
+// Helper: resolve model identifier from request body
 function getModelFromBody(body: { model?: "pro" | "flash" }) {
     if (body.model === "pro") return pro;
     return flash;
@@ -721,17 +721,7 @@ const app = new Elysia({
 })
     .use(cors())
     .use(swagger())
-    .get("/yield", function* () {
-        for (let i = 0; i < 100; i++) {
-            yield "" + i;
-        }
-    })
-    .get("/sse", function* ({}) {
-        for (let i = 0; i < 100; i++) {
-            yield sse("" + i);
-        }
-    })
-    .post("/overall_analysis_general", async ({body}) => {
+    .post("/overall_analysis_general",async ({body}) => {
         const route = '/overall_analysis_general';
         const modelId = getModelFromBody(body);
         const customSys = normalizePrompt(body.customSystemPrompt);
@@ -758,7 +748,7 @@ const app = new Elysia({
 
         await logAfterLLM(route, result);
 
-        console.timeLog("Overall analysis result:", JSON.stringify(result, null, 2));
+        console.log("Overall analysis result:", JSON.stringify(result, null, 2));
 
         return result.text;
     }, {
@@ -794,7 +784,7 @@ const app = new Elysia({
 
         await logAfterLLM(route, result);
 
-        console.timeLog("Overall analysis result:", JSON.stringify(result, null, 2));
+        console.log("Overall analysis result:", JSON.stringify(result, null, 2));
 
         return result.text;
     }, {
@@ -830,11 +820,10 @@ const app = new Elysia({
 
         await logAfterLLM(route, result);
 
-        console.timeLog("Section analysis result:", JSON.stringify(result, null, 2));
+        console.log("Section analysis result:", JSON.stringify(result, null, 2));
 
         return result.text;
     }, {
-        type: "multipart/form-data",
         parse: 'multipart/form-data', // According to https://github.com/elysiajs/elysia/discussions/676
         body: sectionAnalysisBodySchema,
         response: t.String(),
@@ -866,16 +855,15 @@ const app = new Elysia({
 
         await logAfterLLM(route, result);
 
-        console.timeLog("Review result:", JSON.stringify(result, null, 2));
+        console.log("Review result:", JSON.stringify(result, null, 2));
 
         return result.text;
     }, {
-        type: "multipart/form-data",
         parse: 'multipart/form-data', // According to https://github.com/elysiajs/elysia/discussions/676
         body: reviewBodySchema,
         response: t.String(),
     })
-    .post("/ase", async ({body}) => {
+    .post("/ase",async ({body}) => {
         const route = '/ase';
         const modelId = getModelFromBody(body);
         const customSys = normalizePrompt(body.customSystemPrompt);
@@ -904,12 +892,11 @@ const app = new Elysia({
 
         return result.text;
     }, {
-        type: "multipart/form-data",
         parse: 'multipart/form-data',
         body: reviewBodySchema,
         response: t.String(),
     })
-    .post("/sections", async ({body}) => {
+    .post("/sections",async ({body}) => {
         const route = '/sections';
         const modelId = getModelFromBody(body);
         const systemPrompt = getSectionsSystemPrompt();
@@ -937,13 +924,10 @@ const app = new Elysia({
 
         await logAfterLLM(route, result);
 
-        result.object
-
-        console.timeLog("Sections result:", JSON.stringify(result, null, 2));
+        console.log("Sections result:", JSON.stringify(result, null, 2));
 
         return result.object
     }, {
-        type: "multipart/form-data",
         parse: 'multipart/form-data', // According to https://github.com/elysiajs/elysia/discussions/676
         body: sectionsBodySchema,
         response: t.Array(sectionSchema),
@@ -1060,6 +1044,57 @@ const app = new Elysia({
             systemPrompt: t.String(),
             messagePart: t.String()
         }),
+    })
+    .post("/follow_up", async ({body}) => {
+        const route = '/follow_up';
+        const modelId = getModelFromBody(body);
+
+        // Parse conversation history (text-only messages)
+        let history: { role: 'user' | 'assistant'; content: string }[] = [];
+        try {
+            history = JSON.parse(body.conversationHistory);
+        } catch (e) {
+            throw new Error('Invalid conversationHistory JSON');
+        }
+
+        // Build the new user turn content
+        const newUserContent: any[] = [];
+        if (body.newFile) {
+            const instruction = body.textMessage?.trim() || getNewFileFollowUpInstruction();
+            newUserContent.push({ type: 'text', text: instruction });
+            newUserContent.push(await createFileOrImageMessagePart(body.newFile));
+        } else if (body.textMessage && body.textMessage.trim()) {
+            newUserContent.push({ type: 'text', text: body.textMessage });
+        } else {
+            throw new Error('Either newFile or textMessage must be provided');
+        }
+
+        // All prior history is text-only; append new user turn
+        const messages: any[] = [
+            ...history.map(m => ({ role: m.role, content: m.content })),
+            { role: 'user', content: newUserContent },
+        ];
+
+        const promptSummary = body.newFile
+            ? `[New file version: ${body.newFile.name}]`
+            : body.textMessage ?? '';
+
+        logBeforeLLM(route, body, { modelId, systemPrompt: body.systemPrompt, promptSummary });
+
+        const result = await generateText({
+            model: google(body.apiKey)(modelId),
+            system: body.systemPrompt,
+            messages,
+            temperature: 0.7,
+        });
+
+        await logAfterLLM(route, result);
+
+        return result.text;
+    }, {
+        parse: 'multipart/form-data',
+        body: followUpBodySchema,
+        response: t.String(),
     })
     .listen(3000);
 
