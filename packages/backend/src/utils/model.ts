@@ -16,9 +16,8 @@ export function getModelFromBody(body: { model?: 'pro' | 'flash' }) {
 }
 
 // Treat common placeholder values as absent so fallbacks work reliably
-export function normalizePrompt(value: any): string | undefined {
+export function normalizePrompt(value: string | null | undefined): string | undefined {
     if (value === undefined || value === null) return undefined;
-    if (typeof value !== 'string') return value;
     const s = value.trim();
     if (s.length === 0) return undefined;
     const lower = s.toLowerCase();
