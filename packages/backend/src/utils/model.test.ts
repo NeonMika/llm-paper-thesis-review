@@ -30,7 +30,7 @@ describe('normalizePrompt', () => {
         expect(normalizePrompt('hello world')).toBe('hello world');
     });
 
-    it('preserves internal whitespace', () => {
+    it('returns the value without trimming when trimmed form is non-empty', () => {
         expect(normalizePrompt('  hello  ')).toBe('  hello  ');
     });
 });
@@ -50,14 +50,12 @@ describe('getModelFromBody', () => {
 });
 
 describe('pro and flash constants', () => {
-    it('pro is a non-empty string', () => {
-        expect(typeof pro).toBe('string');
-        expect(pro.length).toBeGreaterThan(0);
+    it('pro is the expected Gemini Pro model identifier', () => {
+        expect(pro).toBe('gemini-3-pro-preview');
     });
 
-    it('flash is a non-empty string', () => {
-        expect(typeof flash).toBe('string');
-        expect(flash.length).toBeGreaterThan(0);
+    it('flash is the expected Gemini Flash model identifier', () => {
+        expect(flash).toBe('gemini-3-flash-preview');
     });
 
     it('pro and flash are different values', () => {

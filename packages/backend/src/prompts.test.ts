@@ -83,6 +83,17 @@ describe('getSectionAnalysisSystemPrompt', () => {
         });
         expect(prompt).toContain('work in progress');
     });
+
+    it('includes page limit context when hasPageLimit is true', () => {
+        const prompt = getSectionAnalysisSystemPrompt({
+            ...baseSectionBody,
+            hasPageLimit: true,
+            pageLimit: '10',
+            currentPages: '8',
+        });
+        expect(prompt).toContain('page limit of 10 pages');
+        expect(prompt).toContain('8 pages');
+    });
 });
 
 describe('getSectionAnalysisMessagePart', () => {
@@ -141,6 +152,21 @@ describe('getAseSystemPrompt', () => {
     it('mentions ASE', () => {
         const prompt = getAseSystemPrompt(baseReviewBody);
         expect(prompt).toContain('ASE');
+    });
+
+    it('includes WIP note when workInProgress is true', () => {
+        const prompt = getAseSystemPrompt({ ...baseReviewBody, workInProgress: true });
+        expect(prompt).toContain('work in progress');
+    });
+
+    it('includes page limit note when hasPageLimit and pageLimit are set', () => {
+        const prompt = getAseSystemPrompt({
+            ...baseReviewBody,
+            hasPageLimit: true,
+            pageLimit: '6',
+            currentPages: '5',
+        });
+        expect(prompt).toContain('page limit of 6 pages');
     });
 
     it('works without a body argument', () => {
