@@ -13,10 +13,9 @@
           <label for="review-type">Review Type</label>
           <select id="review-type" v-model="selectedReviewType" @change="handleReviewTypeChange" class="form-select" :disabled="!paperStore.file">
             <option value="">Select a review type...</option>
-            <option value="analysis">Paper Analysis (General)</option>
-            <option value="analysis-detailed">Paper Analysis (Detailed)</option>
-            <option value="review">Paper Review</option>
-            <option value="ase-review">ASE Paper Review</option>
+            <option v-for="[value, label] in Object.entries(REVIEW_TYPE_LABELS)" :key="value" :value="value">
+              {{ label }}
+            </option>
           </select>
         </div>
 
@@ -81,6 +80,7 @@ import Card from 'primevue/card'
 import Button from 'primevue/button'
 import { usePaperStore } from '../stores/paperStore'
 import { usePromptStore } from '../stores/promptStore'
+import { REVIEW_TYPE_LABELS } from '../constants'
 
 const paperStore = usePaperStore()
 const promptStore = usePromptStore()
