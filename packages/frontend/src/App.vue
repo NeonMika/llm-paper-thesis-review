@@ -146,6 +146,11 @@ function isValidationHint(error: unknown): boolean {
             </div>
           </form>
 
+          <!-- LLM Review Editor -->
+          <hr class="section-divider" />
+          <h3>LLM Review Editor</h3>
+          <ReviewPromptEditor />
+
           <!-- Error displays -->
           <div v-if="paperStore.sectionsError" class="p-error">
             <h2>Sections Error</h2>
@@ -181,9 +186,6 @@ function isValidationHint(error: unknown): boolean {
 
         </template>
       </Card>
-
-      <!-- Review Prompt Editor -->
-      <ReviewPromptEditor />
 
       <!-- Review Results List -->
       <ReviewResultsList />
@@ -623,6 +625,12 @@ li {
 .p-fileupload .p-button:focus {
   background: linear-gradient(90deg, #1976d2 0%, #26a69a 100%);
   color: #fff;
+}
+
+.section-divider {
+  border: none;
+  border-top: 1.5px solid #e5e7eb;
+  margin: 1.5em 0;
 }
 
 .flex-center {

@@ -1,64 +1,59 @@
 <template>
-  <Card>
-    <template #title>LLM Review Editor</template>
-    <template #content>
-      <div class="review-editor">
-        <!-- File Status Warning -->
-        <div v-if="!paperStore.file" class="warning-message">
-          ⚠️ Please upload a paper file in the Settings section above before using the review editor.
-        </div>
+  <div class="review-editor">
+    <!-- File Status Warning -->
+    <div v-if="!paperStore.file" class="warning-message">
+      ⚠️ Please upload a paper file above before using the review editor.
+    </div>
 
-        <!-- Review Type Selector -->
-        <div class="field">
-          <label for="review-type">Review Type</label>
-          <select id="review-type" v-model="selectedReviewType" @change="handleReviewTypeChange" class="form-select" :disabled="!paperStore.file">
-            <option value="">Select a review type...</option>
-            <option v-for="[value, label] in Object.entries(REVIEW_TYPE_LABELS)" :key="value" :value="value">
-              {{ label }}
-            </option>
-          </select>
-        </div>
+    <!-- Review Type Selector -->
+    <div class="field">
+      <label for="review-type">Review Type</label>
+      <select id="review-type" v-model="selectedReviewType" @change="handleReviewTypeChange" class="form-select" :disabled="!paperStore.file">
+        <option value="">Select a review type...</option>
+        <option v-for="[value, label] in Object.entries(REVIEW_TYPE_LABELS)" :key="value" :value="value">
+          {{ label }}
+        </option>
+      </select>
+    </div>
 
-        <!-- System Prompt Editor -->
-        <div class="field" v-if="selectedReviewType">
-          <label for="system-prompt">
-            System Prompt
-            <span v-if="isDirty" class="dirty-indicator">*</span>
-          </label>
-          <textarea id="system-prompt" v-model="promptStore.currentSystemPrompt" rows="10" class="prompt-textarea"
-            placeholder="System prompt will load here..."></textarea>
-        </div>
+    <!-- System Prompt Editor -->
+    <div class="field" v-if="selectedReviewType">
+      <label for="system-prompt">
+        System Prompt
+        <span v-if="isDirty" class="dirty-indicator">*</span>
+      </label>
+      <textarea id="system-prompt" v-model="promptStore.currentSystemPrompt" rows="10" class="prompt-textarea"
+        placeholder="System prompt will load here..."></textarea>
+    </div>
 
-        <!-- Message Part Editor -->
-        <div class="field" v-if="selectedReviewType">
-          <label for="message-part">
-            Message Part
-            <span v-if="isDirty" class="dirty-indicator">*</span>
-          </label>
-          <textarea id="message-part" v-model="promptStore.currentMessagePart" rows="10" class="prompt-textarea"
-            placeholder="Message part will load here..."></textarea>
-        </div>
+    <!-- Message Part Editor -->
+    <div class="field" v-if="selectedReviewType">
+      <label for="message-part">
+        Message Part
+        <span v-if="isDirty" class="dirty-indicator">*</span>
+      </label>
+      <textarea id="message-part" v-model="promptStore.currentMessagePart" rows="10" class="prompt-textarea"
+        placeholder="Message part will load here..."></textarea>
+    </div>
 
-        <!-- Reload Prompts Warning -->
-        <div v-if="settingsChanged && selectedReviewType" class="warning-message reload-warning">
-          ⚠️ Settings have changed. The prompts may be outdated.
-          <Button label="Reload Prompts for Changed Settings" @click="reloadPrompts" severity="warning" size="small" />
-        </div>
+    <!-- Reload Prompts Warning -->
+    <div v-if="settingsChanged && selectedReviewType" class="warning-message reload-warning">
+      ⚠️ Settings have changed. The prompts may be outdated.
+      <Button label="Reload Prompts for Changed Settings" @click="reloadPrompts" severity="warning" size="small" />
+    </div>
 
-        <!-- Actions -->
-        <div class="actions" v-if="selectedReviewType">
-          <Button label="Reset to Original" @click="resetPrompts" :disabled="!isDirty" severity="secondary" />
-          <Button :label="!paperStore.file ? 'Upload a file first' : 'Send Review Request'" @click="sendReview" :loading="loading"
-            :disabled="!paperStore.file" />
-        </div>
+    <!-- Actions -->
+    <div class="actions" v-if="selectedReviewType">
+      <Button label="Reset to Original" @click="resetPrompts" :disabled="!isDirty" severity="secondary" />
+      <Button :label="!paperStore.file ? 'Upload a file first' : 'Send Review Request'" @click="sendReview" :loading="loading"
+        :disabled="!paperStore.file" />
+    </div>
 
-        <!-- Error Display -->
-        <div v-if="error" class="error-message">
-          {{ error }}
-        </div>
-      </div>
-    </template>
-  </Card>
+    <!-- Error Display -->
+    <div v-if="error" class="error-message">
+      {{ error }}
+    </div>
+  </div>
 
   <!-- Warning Modal -->
   <div v-if="showWarning" class="modal-overlay" @click="cancelWarning">
@@ -76,7 +71,6 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
-import Card from 'primevue/card'
 import Button from 'primevue/button'
 import { usePaperStore } from '../stores/paperStore'
 import { usePromptStore } from '../stores/promptStore'
