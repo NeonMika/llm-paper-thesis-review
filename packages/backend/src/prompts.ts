@@ -3,6 +3,20 @@ import type { AnalysisBody, ReviewBody, SectionAnalysisBody } from './schemas.ts
 
 // ─── Shared prompt helpers ────────────────────────────────────────────────────
 
+const CURRENT_DATE_PREFIX = 'Current date: ';
+
+function formatCurrentDate(now: Date): string {
+    return now.toISOString().slice(0, 10);
+}
+
+export function withCurrentDate(prompt: string, now: Date = new Date()): string {
+    const promptWithoutExistingDate = prompt.replace(
+        /^Current date: \d{4}-\d{2}-\d{2}\.\r?\n\r?\n?/,
+        ''
+    );
+    return `${CURRENT_DATE_PREFIX}${formatCurrentDate(now)}.\n\n${promptWithoutExistingDate}`;
+}
+
 function buildContextPreamble(body: ReviewBody | undefined, wipNote: string): string {
     const wip = body?.workInProgress ? `\n${wipNote}` : '';
     const page =
@@ -25,17 +39,17 @@ function getOverallAnalysisFeedbackCriteria(kind: string): string {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function getOverallAnalysisSystemPrompt(body: AnalysisBody) {
-    return `You are an intelligent writing assistant for reviewing a computer science ${body.kind}.
+    return withCurrentDate(`You are an intelligent writing assistant for reviewing a computer science ${body.kind}.
 You are proficient in computer science and software engineering, with expert knowledge in technical and scientific writing in the field of computer science.
 
 You analyze ${body.workInProgress ? 'a work in progress, so keep this in mind. You can already suggest improvements for parts that are not yet implemented or marked with TODO.' : 'a completed work that is ready for review.'}
-${body.hasPageLimit ? `The ${body.kind} has a page limit of ${body.pageLimit} pages, and currently has ${body.currentPages} pages. Keep this restriction in mind when suggesting changes.` : 'The work does not have a page limit.'}
+${body.hasPageLimit ? `The ${body.kind} has a page limit of ${body.pageLimit} pages, and currently has ${body.currentPages} pages. Keep this restriction in mind when suggesting changes. If the paper is currently too long, you might provide professional advice on how to shorten the paper without losing quality.` : 'The work does not have a page limit.'}
 
 Be really honest, do not hold back critique if necessary.
 Your analyses, feedback and suggestions must be helpful, they should be professional and in a constructive tone.
 
 Important: When analyzing text files, always ignore comments (for example, lines starting with % in LaTeX or similar comment syntax in other formats). Comments are not part of the actual content and should not be considered in your analysis.
-`;
+`);
 }
 
 export function getOverallGeneralAnalysisMessagePart(body: AnalysisBody): TextPart {
@@ -99,7 +113,7 @@ export function getReviewSystemPrompt(body?: ReviewBody) {
         body,
         'Note: This paper is a **work in progress**. The authors may be submitting an early or incomplete draft. Please weigh this context accordingly in your assessment.'
     );
-    return `# ROLE AND GOAL
+    return withCurrentDate(`# ROLE AND GOAL
 ${preamble}
 You are a world-class, seasoned reviewer for a scientific computer science conference.
 Your expertise spans computer science and software engineering, with a deep understanding of academic research methodologies and technical writing standards.
@@ -194,7 +208,7 @@ This section provides a detailed breakdown of the assessment against the five co
 - **Acknowledge Strengths:** Every review, even a strong reject, must identify and acknowledge the paper's strengths.
 - **Handle Ambiguity Professionally:** If a section is ambiguous or lacks detail, state this clearly as a review finding. E.g., "The description of the algorithm is too high-level, preventing a full assessment of its soundness and reproducibility." This places the onus on the authors to improve clarity.
 - **No Hallucinations:** If you are not familiar with a cited paper, do not invent details about it. It is better to state, "The comparison to [Author, Year] is not sufficiently detailed for me to assess its implications."
-`;
+`);
 }
 
 export function getReviewMessagePart(body: ReviewBody): TextPart {
@@ -212,7 +226,7 @@ export function getAseSystemPrompt(body?: ReviewBody) {
         body,
         'Note: This paper is a **work in progress**. Please weigh this context accordingly in your assessment.'
     );
-    return `# ROLE AND GOAL
+    return withCurrentDate(`# ROLE AND GOAL
 ${preamble}
 You are a world-class, seasoned reviewer for the IEEE/ACM International Conference on Automated Software Engineering (ASE), specifically for the Industry Showcase track.
 Your expertise spans automated software engineering, industrial practice, and the application of automation in real-world software systems.
@@ -246,11 +260,13 @@ Industry Showcase submissions should prioritize impact and realistic application
 
 # REVIEW CRITERIA
 Evaluate the paper according to the following criteria:
-- **Originality:** Does the paper advance the state of practice in its industrial context?
-- **Relevance to Industrial Application:** Is the relevance to industry clear and well described?
-- **Significance of Contributions:** How significant is the work compared to related works and similar industrial contexts?
-- **Generalizability and Scalability:** Are the results applicable beyond the specific context?
+- **Originality:** Submitted papers shall demonstrate how they advance the current state of the practice in their respective industrial contexts.
+- **Relevance to Industrial Application:** Submitted papers to this track must have relevance to the industry, which must be clearly described in the paper.
+- **Significance of Contributions:** The paper should explain how significant the work is in particular compared to the existing related works and similar industrial contexts.
+- **Generalizability and Scalability:** The evaluation will consider generalizability and scalability concerns and discuss how the results are applicable beyond the specific industrial context of the paper.
 - **Clarity:** Is the paper clearly written and well-structured?
+
+A Mandatory Data Availability Statement must be placed in the paper submission after Conclusions and within the page limit. The data or reproduction packages (aka artifacts) should be published publicly via a DOI that provides long-term archive. All data that led to the results in the paper should be available to the reviewers and readers. If this is not possible, the Data Availability Statement should explicitly explain the reason.
 
 # OUTPUT FORMAT
 Use the following Markdown structure:
@@ -258,46 +274,46 @@ Use the following Markdown structure:
 ### Summary
 [Brief summary of the paper and its industrial context.]
 
-### Strengths
+### Major Pros
+What are the major points speaking for paper acceptance?
 - [List major strengths, especially regarding industrial impact, automation, and practical relevance.]
 
-### Weaknesses
+### Major Cons
+What are the major points speaking against paper acceptance?
 - [List major weaknesses, e.g., lack of generalizability, unclear impact, insufficient evaluation, etc.]
 
-### Detailed Comments
-[Provide detailed, criterion-based comments. Reference the review criteria above.]
+### Detailed Comments for Authors
+- [Provide detailed, criterion-based comments. Reference the review criteria above.]
+- [List concrete, actionable suggestions for the authors.]
 
-### Suggestions for Improvement
-[List concrete, actionable suggestions for the authors.]
+### Comments for PC (if any)
 
 ### Overall Recommendation
-[Provide a clear recommendation (e.g., Strong Accept, Weak Accept, Borderline, Weak Reject, Strong Reject) and justify your decision based on the criteria above.]
-`;
+[Provide a clear recommendation (e.g., 5 - Strong Accept, 4- Accept, 3 - Weak Accept, 2 - Weak Reject, 1 - Reject) and justify your decision based on the criteria above.]
+`);
 }
 
 export function getAseMessagePart(): TextPart {
     return {
         type: 'text',
         text: `Analyze the provided paper for the ASE 2025 Industry Showcase track.
-Focus on industrial relevance, impact, and practical application.
-Use the review criteria and output format from the system prompt.
-Present the final review that should be sent to the authors.
-Be specific, honest, and constructive.`,
+Focus on industrial relevance, impact, and practical application and use the review criteria and output format from the system prompt, as laid out in detail in the system prompt.
+Present the final review that should be sent to the authors.`,
     };
 }
 
 export function getSectionAnalysisSystemPrompt(body: SectionAnalysisBody) {
-    return `You are an intelligent writing assistant for reviewing a computer science ${body.kind}.
+    return withCurrentDate(`You are an intelligent writing assistant for reviewing a computer science ${body.kind}.
 You are proficient in computer science and software engineering, with expert knowledge in technical and scientific writing in the field of computer science.
 
 You analyze one specific section in ${body.workInProgress ? 'a work in progress, so keep this in mind. You can already suggest improvements for parts that are not yet implemented or marked with TODO.' : 'a completed work that is ready for review.'}
-${body.hasPageLimit ? `The ${body.kind} has a page limit of ${body.pageLimit} pages, and currently has ${body.currentPages} pages. Keep this restriction in mind when suggesting changes.` : 'The work does not have a page limit.'}
+${body.hasPageLimit ? `The ${body.kind} has a page limit of ${body.pageLimit} pages, and currently has ${body.currentPages} pages. Keep this restriction in mind when suggesting changes. If the paper is currently too long, you might provide professional advice on how to shorten the paper without losing quality.` : 'The work does not have a page limit.'}
 
 Be really honest, do not hold back critique if necessary.
 Your analyses, feedback and suggestions must be helpful, they should be professional and in a constructive tone.
 
 Important: When analyzing text files, always ignore comments (for example, lines starting with % in LaTeX or similar comment syntax in other formats). Comments are not part of the actual content and should not be considered in your analysis.
-`;
+`);
 }
 
 export function getSectionAnalysisMessagePart(body: SectionAnalysisBody): TextPart {
@@ -336,7 +352,9 @@ Provide concise, focused, concrete actionable improvements:
 }
 
 export function getSectionsSystemPrompt() {
-    return 'You are given a document that is split into sections. Extract the section titles. Also include sections that do not have a number (e.g., Abstract)';
+    return withCurrentDate(
+        'You are given a document that is split into sections. Extract the section titles. Also include sections that do not have a number (e.g., Abstract)'
+    );
 }
 
 export const NEW_FILE_FOLLOW_UP_INSTRUCTION =

@@ -6,6 +6,7 @@ import {
     getReviewMessagePart,
     getAseSystemPrompt,
     getAseMessagePart,
+    withCurrentDate,
 } from '../prompts.ts';
 import { google, getModelFromBody, normalizePrompt } from '../utils/model.ts';
 import { createFileOrImageMessagePart } from '../utils/fileHelpers.ts';
@@ -18,7 +19,7 @@ export const reviewRoutes = new Elysia()
             const route = '/review';
             const modelId = getModelFromBody(body);
             const customSys = normalizePrompt(body.customSystemPrompt);
-            const systemPrompt = customSys ?? getReviewSystemPrompt(body);
+            const systemPrompt = customSys ? withCurrentDate(customSys) : getReviewSystemPrompt(body);
             const customMsg = normalizePrompt(body.customMessagePart);
             const msgPart = getReviewMessagePart(body);
             const promptSummary = customMsg ?? msgPart.text;
@@ -57,7 +58,7 @@ export const reviewRoutes = new Elysia()
             const route = '/ase';
             const modelId = getModelFromBody(body);
             const customSys = normalizePrompt(body.customSystemPrompt);
-            const systemPrompt = customSys ?? getAseSystemPrompt(body);
+            const systemPrompt = customSys ? withCurrentDate(customSys) : getAseSystemPrompt(body);
             const customMsg = normalizePrompt(body.customMessagePart);
             const msgPart = getAseMessagePart();
             const promptSummary = customMsg ?? msgPart.text;

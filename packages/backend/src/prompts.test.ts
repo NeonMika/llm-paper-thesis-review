@@ -6,6 +6,7 @@ import {
     getReviewSystemPrompt,
     getAseSystemPrompt,
     getSectionsSystemPrompt,
+    withCurrentDate,
 } from './prompts';
 import type { AnalysisBody, SectionAnalysisBody, ReviewBody } from './schemas';
 
@@ -28,7 +29,14 @@ const baseReviewBody: ReviewBody = {
     kind: 'full conference paper',
 };
 
+const currentDatePattern = /^Current date: \d{4}-\d{2}-\d{2}\.\n\n/;
+
 describe('getOverallAnalysisSystemPrompt', () => {
+    it('starts with the current date', () => {
+        const prompt = getOverallAnalysisSystemPrompt(baseAnalysisBody);
+        expect(prompt).toMatch(currentDatePattern);
+    });
+
     it('includes the paper kind', () => {
         const prompt = getOverallAnalysisSystemPrompt(baseAnalysisBody);
         expect(prompt).toContain('full conference paper');
@@ -71,6 +79,11 @@ describe('getOverallAnalysisSystemPrompt', () => {
 });
 
 describe('getSectionAnalysisSystemPrompt', () => {
+    it('starts with the current date', () => {
+        const prompt = getSectionAnalysisSystemPrompt(baseSectionBody);
+        expect(prompt).toMatch(currentDatePattern);
+    });
+
     it('includes the section kind', () => {
         const prompt = getSectionAnalysisSystemPrompt(baseSectionBody);
         expect(prompt).toContain('master thesis');
@@ -114,6 +127,11 @@ describe('getSectionAnalysisMessagePart', () => {
 });
 
 describe('getReviewSystemPrompt', () => {
+    it('starts with the current date', () => {
+        const prompt = getReviewSystemPrompt(baseReviewBody);
+        expect(prompt).toMatch(currentDatePattern);
+    });
+
     it('returns a non-empty string', () => {
         const prompt = getReviewSystemPrompt(baseReviewBody);
         expect(typeof prompt).toBe('string');
@@ -143,6 +161,11 @@ describe('getReviewSystemPrompt', () => {
 });
 
 describe('getAseSystemPrompt', () => {
+    it('starts with the current date', () => {
+        const prompt = getAseSystemPrompt(baseReviewBody);
+        expect(prompt).toMatch(currentDatePattern);
+    });
+
     it('returns a non-empty string', () => {
         const prompt = getAseSystemPrompt(baseReviewBody);
         expect(typeof prompt).toBe('string');
@@ -177,9 +200,25 @@ describe('getAseSystemPrompt', () => {
 });
 
 describe('getSectionsSystemPrompt', () => {
+    it('starts with the current date', () => {
+        const prompt = getSectionsSystemPrompt();
+        expect(prompt).toMatch(currentDatePattern);
+    });
+
     it('returns a string mentioning section extraction', () => {
         const prompt = getSectionsSystemPrompt();
         expect(typeof prompt).toBe('string');
         expect(prompt.toLowerCase()).toContain('section');
+    });
+});
+
+describe('withCurrentDate', () => {
+    it('replaces an existing date prefix instead of duplicating it', () => {
+        const prompt = withCurrentDate(
+            'Current date: 2026-01-01.\n\nKeep reviewing the paper.',
+            new Date('2026-05-29T10:21:36.100Z')
+        );
+
+        expect(prompt).toBe('Current date: 2026-05-29.\n\nKeep reviewing the paper.');
     });
 });

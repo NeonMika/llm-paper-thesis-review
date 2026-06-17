@@ -1,7 +1,7 @@
 import { Elysia, t } from 'elysia';
 import { generateText, type CoreUserMessage, type CoreAssistantMessage, type UserContent } from 'ai';
 import { followUpBodySchema } from '../schemas.ts';
-import { NEW_FILE_FOLLOW_UP_INSTRUCTION } from '../prompts.ts';
+import { NEW_FILE_FOLLOW_UP_INSTRUCTION, withCurrentDate } from '../prompts.ts';
 import { google, getModelFromBody } from '../utils/model.ts';
 import { createFileOrImageMessagePart } from '../utils/fileHelpers.ts';
 import { logBeforeLLM, logAfterLLM } from '../utils/logging.ts';
@@ -38,12 +38,13 @@ export const followUpRoutes = new Elysia().post(
         const promptSummary = body.newFile
             ? `[New file version: ${body.newFile.name}]`
             : (body.textMessage ?? '');
+        const systemPrompt = withCurrentDate(body.systemPrompt);
 
-        logBeforeLLM(route, body, { modelId, systemPrompt: body.systemPrompt, promptSummary });
+        logBeforeLLM(route, body, { modelId, systemPrompt, promptSummary });
 
         const result = await generateText({
             model: google(body.apiKey)(modelId),
-            system: body.systemPrompt,
+            system: systemPrompt,
             messages,
             temperature: 0.7,
         });

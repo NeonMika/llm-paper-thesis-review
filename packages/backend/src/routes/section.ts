@@ -6,6 +6,7 @@ import {
     getSectionAnalysisSystemPrompt,
     getSectionAnalysisMessagePart,
     getSectionsSystemPrompt,
+    withCurrentDate,
 } from '../prompts.ts';
 import { google, getModelFromBody, normalizePrompt } from '../utils/model.ts';
 import { createFileOrImageMessagePart } from '../utils/fileHelpers.ts';
@@ -18,7 +19,9 @@ export const sectionRoutes = new Elysia()
             const route = '/section_analysis';
             const modelId = getModelFromBody(body);
             const customSys = normalizePrompt(body.customSystemPrompt);
-            const systemPrompt = customSys ?? getSectionAnalysisSystemPrompt(body);
+            const systemPrompt = customSys
+                ? withCurrentDate(customSys)
+                : getSectionAnalysisSystemPrompt(body);
             const customMsg = normalizePrompt(body.customMessagePart);
             const msgPart = getSectionAnalysisMessagePart(body);
             const promptSummary = customMsg ?? msgPart.text;

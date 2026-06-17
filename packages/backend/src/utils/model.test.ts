@@ -51,11 +51,11 @@ describe('getModelFromBody', () => {
 
 describe('pro and flash constants', () => {
     it('pro is the expected Gemini Pro model identifier', () => {
-        expect(pro).toBe('gemini-3-pro-preview');
+        expect(pro).toBe('gemini-3.1-pro-preview');
     });
 
     it('flash is the expected Gemini Flash model identifier', () => {
-        expect(flash).toBe('gemini-3-flash-preview');
+        expect(flash).toBe('gemini-3.5-flash');
     });
 
     it('pro and flash are different values', () => {

@@ -1,8 +1,8 @@
 /// <reference types="bun-types" />
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 
-export const pro = 'gemini-3-pro-preview';
-export const flash = 'gemini-3-flash-preview';
+export const pro = 'gemini-3.1-pro-preview';
+export const flash = 'gemini-3.5-flash';
 
 export function google(apiKey: string | null | undefined) {
     return createGoogleGenerativeAI({

@@ -28,8 +28,8 @@ function clearFile() {
 }
 
 const modelOptions = [
-  { label: 'Gemini 3 Pro Preview', value: 'pro' },
-  { label: 'Gemini 3 Flash Preview', value: 'flash' },
+  { label: 'Gemini 3.1 Pro Preview', value: 'pro' },
+  { label: 'Gemini 3.5 Flash', value: 'flash' },
 ]
 
 // Warn before leaving page if there are unsaved changes

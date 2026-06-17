@@ -5,6 +5,7 @@ import {
     getOverallAnalysisSystemPrompt,
     getOverallGeneralAnalysisMessagePart,
     getOverallDetailedAnalysisMessagePart,
+    withCurrentDate,
 } from '../prompts.ts';
 import { google, getModelFromBody, normalizePrompt } from '../utils/model.ts';
 import { createFileOrImageMessagePart } from '../utils/fileHelpers.ts';
@@ -17,7 +18,9 @@ export const analysisRoutes = new Elysia()
             const route = '/overall_analysis_general';
             const modelId = getModelFromBody(body);
             const customSys = normalizePrompt(body.customSystemPrompt);
-            const systemPrompt = customSys ?? getOverallAnalysisSystemPrompt(body);
+            const systemPrompt = customSys
+                ? withCurrentDate(customSys)
+                : getOverallAnalysisSystemPrompt(body);
             const customMsg = normalizePrompt(body.customMessagePart);
             const msgPart = getOverallGeneralAnalysisMessagePart(body);
             const promptSummary = customMsg ?? msgPart.text;
@@ -56,7 +59,9 @@ export const analysisRoutes = new Elysia()
             const route = '/overall_analysis_detailed';
             const modelId = getModelFromBody(body);
             const customSys = normalizePrompt(body.customSystemPrompt);
-            const systemPrompt = customSys ?? getOverallAnalysisSystemPrompt(body);
+            const systemPrompt = customSys
+                ? withCurrentDate(customSys)
+                : getOverallAnalysisSystemPrompt(body);
             const customMsg = normalizePrompt(body.customMessagePart);
             const msgPart = getOverallDetailedAnalysisMessagePart(body);
             const promptSummary = customMsg ?? msgPart.text;
