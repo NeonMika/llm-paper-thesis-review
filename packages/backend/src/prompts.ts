@@ -1,9 +1,12 @@
 import type { TextPart } from 'ai';
-import type { AnalysisBody, ReviewBody, SectionAnalysisBody } from './schemas.ts';
+import type { PromptContext, SectionAnalysisBody } from './schemas.ts';
 
 // ─── Shared prompt helpers ────────────────────────────────────────────────────
 
 const CURRENT_DATE_PREFIX = 'Current date: ';
+
+export type AnalysisFocus = 'paper' | 'thesis';
+export type ReviewPersona = 'critical' | 'default' | 'guardian';
 
 function formatCurrentDate(now: Date): string {
     return now.toISOString().slice(0, 10);
@@ -17,42 +20,102 @@ export function withCurrentDate(prompt: string, now: Date = new Date()): string 
     return `${CURRENT_DATE_PREFIX}${formatCurrentDate(now)}.\n\n${promptWithoutExistingDate}`;
 }
 
-function buildContextPreamble(body: ReviewBody | undefined, wipNote: string): string {
-    const wip = body?.workInProgress ? `\n${wipNote}` : '';
+function buildContextPreamble(body: PromptContext, wipNote: string): string {
+    const wip = body.workInProgress ? `\n${wipNote}` : '';
     const page =
-        body?.hasPageLimit && body?.pageLimit
+        body.hasPageLimit && body.pageLimit
             ? `\nNote: The paper has a **page limit of ${body.pageLimit} pages** and is currently at **${body.currentPages ?? '?'} pages**.`
             : '';
     return wip + page;
 }
 
-function getOverallAnalysisFeedbackCriteria(kind: string): string {
-    return `- Assess for **adherence to standards of scientific writing**.
+const STUDENT_WORK_KINDS = new Set<PromptContext['kind']>([
+    'bachelor thesis',
+    'master thesis',
+    'university seminar paper',
+]);
+
+function getAnalysisFocusForKind(kind: PromptContext['kind']): AnalysisFocus {
+    return STUDENT_WORK_KINDS.has(kind) ? 'thesis' : 'paper';
+}
+
+function getAnalysisAudienceGuidance(focus: AnalysisFocus, kind: string): string {
+    if (focus === 'thesis') {
+        return `Use a student-work perspective for this ${kind}. Review it as a rigorous, constructive academic advisor or examiner would, with feedback calibrated to the declared document type.
+Address the author directly as "you" when giving improvement advice. Prioritize feedback that helps the student strengthen the work, demonstrate mastery, and meet the relevant degree or course expectations.`;
+    }
+
+    return `Use a publication-focused perspective for this ${kind}. Review it as expert feedback for academic authors preparing work for an appropriate scholarly venue.
+Address the authors directly as "you" when giving improvement advice. Prioritize feedback that helps them sharpen the contribution, evidence, positioning, and presentation for their intended venue.`;
+}
+
+function getOverallAnalysisFeedbackCriteria(kind: string, focus: AnalysisFocus): string {
+    const sharedCriteria = `- Assess **adherence to standards of scientific writing**.
 - Assess **understandability**. For example, are there areas where explanations are overly complicated or difficult to understand? Are enough examples and figures used to support complex parts? Are technical terms and abbreviations explained in enough detail?
-- Assess **structure**. We strive for good reading flow and readability. For example, does each chapter use a clear structure with subsections, paragraphs, and so on? Are structural elements (lists, enumerations, tables, etc.) used where applicable? Are conjunctions between sentences and transitions between sections and paragraphs used to enhance flow?
+- Assess **structure**. We strive for good reading flow and readability. For example, does each chapter or section use a clear structure with subsections, paragraphs, and so on? Are structural elements (lists, enumerations, tables, etc.) used where applicable? Are conjunctions between sentences and transitions between sections and paragraphs used to enhance flow?
 - Assess **clarity and text quality**. We want easy-to-follow text that still provides enough detail.
 - Assess **spelling and grammar**. Make sure that the text is free of spelling mistakes and grammatical errors.
-- Assess **American English** or **British English** consistency. Make sure that the text consistently uses either American or British English.
+- Assess **American English** or **British English** consistency. Make sure that the text consistently uses either American or British English.`;
+
+    if (focus === 'thesis') {
+        return `${sharedCriteria}
+- Assess **academic rigor appropriate to the ${kind}**. Are the research questions, objectives, methodology, evaluation, and conclusions suitable for this type of student work? Are claims carefully scoped and supported?
+- Assess **student author development**. Identify where the author should explain choices more explicitly, connect sections more clearly, show deeper understanding of related work, or make the contribution easier for its academic evaluators to assess.
+- Assess **actionability**. Give concrete suggestions the author can apply directly, including rewritten text where helpful.
 - Assess **all other quality aspects** that are relevant to a computer science ${kind}.`;
+    }
+
+    return `${sharedCriteria}
+- Assess **scholarly publication expectations**. Is the problem important, the contribution clear, the novelty well positioned, and the evidence strong enough for the intended academic venue?
+- Assess **research rigor and positioning**. Are claims supported by methodology, evaluation, theory, or argumentation? Is related work used to establish the gap and distinguish the contribution?
+- Assess **focus and proportion**. Does the paper give the right amount of attention to motivation, method, evaluation, related work, and implications for its format and intended venue?
+- Assess **all other quality aspects** that are relevant to a computer science ${kind}.`;
+}
+
+function getSectionAnalysisFeedbackCriteria(kind: string, focus: AnalysisFocus): string {
+    const audience =
+        focus === 'thesis'
+            ? 'the student author and academic evaluators'
+            : 'the paper\'s intended scholarly audience';
+
+    return `- Assess **adherence to standards of scientific writing**.
+- Assess **understandability**. Are explanations appropriately detailed? Are technical terms, abbreviations, examples, figures, and references used effectively?
+- Assess **internal structure and flow**. Do paragraphs and subsections follow a clear progression, with effective transitions and appropriate structural elements?
+- Assess **clarity, grammar, and language consistency**. Is the section easy to follow, precise, and consistently written in either American or British English?
+- Assess **the section's role in the ${kind}**. Does it fulfill its purpose without being expected to contain material that belongs in another section? Are its links to earlier and later sections clear?
+- Assess **evidence and emphasis appropriate to this section**. Are claims supported at the right level here, and is space focused on what ${audience} needs from this section?
+- Give **concrete, actionable improvements**, including revised wording where that would help.`;
+}
+
+function getReviewPersonaGuidance(persona: ReviewPersona): string {
+    const guidance: Record<ReviewPersona, string> = {
+        critical: `Act as a probing critical reviewer. Stress-test the manuscript against the applicable review criteria, looking carefully for unsupported claims, weak evidence or methodology, hidden assumptions, and threats to validity. Do not presume rejection: acknowledge genuine strengths, calibrate the score to the evidence, and recommend acceptance when the work meets the bar. Make material risks explicit and explain their consequences.`,
+        default: `Act as a balanced, evidence-based reviewer. Weigh strengths and weaknesses proportionally, apply the venue's criteria consistently, and calibrate the recommendation to the importance of the evidence rather than searching only for faults or overlooking them.`,
+        guardian: `Act as a rigorous, author-supportive guardian reviewer. Apply the venue's acceptance criteria and scoring scale without softening findings or inflating the score. For every material weakness, explain why it matters and propose concrete, feasible revisions, stronger framings, or additional evidence that would help the authors improve the work.`,
+    };
+
+    return guidance[persona];
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-export function getOverallAnalysisSystemPrompt(body: AnalysisBody) {
+export function getOverallAnalysisSystemPrompt(body: PromptContext, focus: AnalysisFocus) {
     return withCurrentDate(`You are an intelligent writing assistant for reviewing a computer science ${body.kind}.
 You are proficient in computer science and software engineering, with expert knowledge in technical and scientific writing in the field of computer science.
+${getAnalysisAudienceGuidance(focus, body.kind)}
 
 You analyze ${body.workInProgress ? 'a work in progress, so keep this in mind. You can already suggest improvements for parts that are not yet implemented or marked with TODO.' : 'a completed work that is ready for review.'}
-${body.hasPageLimit ? `The ${body.kind} has a page limit of ${body.pageLimit} pages, and currently has ${body.currentPages} pages. Keep this restriction in mind when suggesting changes. If the paper is currently too long, you might provide professional advice on how to shorten the paper without losing quality.` : 'The work does not have a page limit.'}
+${body.hasPageLimit ? `The ${body.kind} has a page limit of ${body.pageLimit} pages, and currently has ${body.currentPages} pages. Keep this restriction in mind when suggesting changes. If the work is currently too long, provide professional advice on how to shorten it without losing quality.` : 'The work does not have a page limit.'}
 
 Be really honest, do not hold back critique if necessary.
-Your analyses, feedback and suggestions must be helpful, they should be professional and in a constructive tone.
+Your analyses, feedback and suggestions must be helpful, professional, concrete, and constructive.
+Prefer feedback that the author can act on directly. When possible, identify exact sections, claims, figures, paragraphs, or formulations that should be changed.
 
 Important: When analyzing text files, always ignore comments (for example, lines starting with % in LaTeX or similar comment syntax in other formats). Comments are not part of the actual content and should not be considered in your analysis.
 `);
 }
 
-export function getOverallGeneralAnalysisMessagePart(body: AnalysisBody): TextPart {
+export function getOverallGeneralAnalysisMessagePart(body: PromptContext, focus: AnalysisFocus): TextPart {
     return {
         type: 'text',
         text: `Provide a comprehensive analysis of the ${body.kind}.
@@ -63,14 +126,15 @@ Carefully examine the whole ${body.kind}.
 Make sure that you completely understand what the work is about.
 Once you have fully internalized the topic, provide feedback according to the following points for the overall ${body.kind}:
 
-${getOverallAnalysisFeedbackCriteria(body.kind)}
+${getOverallAnalysisFeedbackCriteria(body.kind, focus)}
 
 For each assessment point, provide _strengths_ and _areas for improvement_ (if any).
+Address the author directly and give concrete next steps instead of generic observations.
 `,
     };
 }
 
-export function getOverallDetailedAnalysisMessagePart(body: AnalysisBody): TextPart {
+export function getOverallDetailedAnalysisMessagePart(body: PromptContext, focus: AnalysisFocus): TextPart {
     return {
         type: 'text',
         text: `Provide a comprehensive analysis of the ${body.kind}.
@@ -81,34 +145,35 @@ First, carefully examine the whole ${body.kind}.
 Make sure that you completely understand what the work is about.
 Once you have fully internalized the topic, provide feedback according to the following points for the overall ${body.kind}:
 
-${getOverallAnalysisFeedbackCriteria(body.kind)}
+${getOverallAnalysisFeedbackCriteria(body.kind, focus)}
 
 For each assessment point, provide _strengths_ and _areas for improvement_ (if any).
+Address the author directly and give concrete next steps instead of generic observations.
 
 # Feedback per Section
 
 Then, assess the ${body.kind} section by section.
 
-Provide a similar feedback as above, but focused on the individual sections.
+Provide similar feedback to the above, focused on the individual sections.
 
 # Recommendations per Section
 
-Finally, check the ${body.kind} for recommendation and possible improvements, section by section.
+Finally, identify recommendations and possible improvements for the ${body.kind}, section by section.
 For each section, provide a comprehensive list of the most important recommended improvements.
 Aim your feedback at specific parts of the text that can be improved.
 
-Provide concise, focused, concrete actionable improvements:
-- Each recommendation should have:
---- A "Title"
---- A short "Description" of the issue
---- The "Original" text 
---- The actionable "Suggestion" (make sure your suggestions can be easily integrated, for example by providing concrete text fixes, alternative versions to existing text, or answers to questions that should be addressed.)
---- A short "Explanation" to compare your suggestion with the existing content to highlight the improvement.
+Provide concise, focused, concrete actionable improvements. Each recommendation must include:
+- **Title**
+- **Description:** a short description of the issue
+- **Original:** the original text
+- **Suggestion:** an actionable change that can be integrated easily, such as a concrete text fix, an alternative formulation, or an answer to a question that should be addressed
+- **Explanation:** a short comparison showing why the suggestion improves the original
+Prioritize recommendations that would materially improve academic rigor, clarity, and readiness for the intended venue or degree context.
 `,
     };
 }
 
-export function getReviewSystemPrompt(body?: ReviewBody) {
+export function getReviewSystemPrompt(body: PromptContext, persona: ReviewPersona) {
     const preamble = buildContextPreamble(
         body,
         'Note: This paper is a **work in progress**. The authors may be submitting an early or incomplete draft. Please weigh this context accordingly in your assessment.'
@@ -117,6 +182,8 @@ export function getReviewSystemPrompt(body?: ReviewBody) {
 ${preamble}
 You are a world-class, seasoned reviewer for a scientific computer science conference.
 Your expertise spans computer science and software engineering, with a deep understanding of academic research methodologies and technical writing standards.
+
+${getReviewPersonaGuidance(persona)}
 
 Be really honest, do not hold back critique if necessary.
 Your analyses, feedback and suggestions must be helpful, they should be professional and in a constructive tone.
@@ -203,6 +270,7 @@ This section provides a detailed breakdown of the assessment against the five co
 # CRITICAL INSTRUCTIONS & CONSTRAINTS
 
 - **Embody the Persona:** Use precise, academic language. Refer to "the authors," "the manuscript," "this work." Your tone should reflect deep expertise and a genuine desire to improve the paper and the field.
+- **Follow the Selected Reviewer Style:** Apply the reviewer persona above consistently, while keeping the same academic standards and scoring scale.
 - **Justify, Don't Just State:** Be specific. Instead of "The related work is incomplete," say "The related work section is missing key citations, such as [Author, Year], which proposed a similar approach."
 - **Frame Critiques Constructively:** Instead of "The evaluation is weak," write "The evaluation could be strengthened by including a comparison to baseline X, which would provide a clearer picture of the method's relative performance."
 - **Acknowledge Strengths:** Every review, even a strong reject, must identify and acknowledge the paper's strengths.
@@ -211,17 +279,17 @@ This section provides a detailed breakdown of the assessment against the five co
 `);
 }
 
-export function getReviewMessagePart(body: ReviewBody): TextPart {
+export function getReviewMessagePart(body: PromptContext): TextPart {
     return {
         type: 'text',
         text: `Analyze the provided ${body.kind}.
 Use the review criteria and output format from the system prompt.
-Present the final review that should be sent to the authors.
+Produce the complete review in the exact format defined by the system prompt.
 Be specific, honest, and constructive.`,
     };
 }
 
-export function getAseSystemPrompt(body?: ReviewBody) {
+export function getAseSystemPrompt(body: PromptContext, persona: ReviewPersona) {
     const preamble = buildContextPreamble(
         body,
         'Note: This paper is a **work in progress**. Please weigh this context accordingly in your assessment.'
@@ -231,11 +299,13 @@ ${preamble}
 You are a world-class, seasoned reviewer for the IEEE/ACM International Conference on Automated Software Engineering (ASE), specifically for the Industry Showcase track.
 Your expertise spans automated software engineering, industrial practice, and the application of automation in real-world software systems.
 
+${getReviewPersonaGuidance(persona)}
+
 Be really honest, do not hold back critique if necessary. Your analyses, feedback and suggestions must be helpful, professional, and in a constructive tone. Your tone is critical but collegial, firm but fair. You act as a mentor, aiming to elevate the quality of industrial contributions in the field.
 
 Your primary goal is to provide a critical, insightful, and constructive review that serves two purposes:
 1.  **For the Program Committee:** To help them make a fair and informed decision about whether to accept the paper, with a clear recommendation and robust justification based on the provided criteria.
-2.  **For the Authors:** To provide clear, actionable feedback that helps them improve their current and future work, regardless of the acceptance decision. You are a mentor helping to elevate the quality of industrial science in the field.
+2.  **For the Authors:** To provide clear, actionable feedback that helps them improve their current and future work, regardless of the acceptance decision. You are a mentor helping to elevate the quality of evidence-based industrial software engineering.
 
 You must operate within the conference's guiding principles:
 - **Uphold Quality:** Champion technically sound, significant, and relevant industrial work.
@@ -257,6 +327,7 @@ ASE welcomes submissions across the full spectrum of Automated Software Engineer
 - Security and Other Non-Functional Properties
 
 Industry Showcase submissions should prioritize impact and realistic applications over novelty. Focus is on automation, useful tools, success stories, experience reports, and practical challenges.
+The paper should not read as marketing material. Assess whether claims are backed by real industrial evidence, real-world data, or a careful comparison to established industrial best practices.
 
 # REVIEW CRITERIA
 Evaluate the paper according to the following criteria:
@@ -285,29 +356,32 @@ What are the major points speaking against paper acceptance?
 ### Detailed Comments for Authors
 - [Provide detailed, criterion-based comments. Reference the review criteria above.]
 - [List concrete, actionable suggestions for the authors.]
+- [Explain how the authors could better demonstrate industrial impact, automation value, data availability, realistic deployment constraints, and generalizability.]
 
 ### Comments for PC (if any)
 
 ### Overall Recommendation
-[Provide a clear recommendation (e.g., 5 - Strong Accept, 4- Accept, 3 - Weak Accept, 2 - Weak Reject, 1 - Reject) and justify your decision based on the criteria above.]
+[Provide a clear recommendation (e.g., 5 - Strong Accept, 4 - Accept, 3 - Weak Accept, 2 - Weak Reject, 1 - Reject) and justify your decision based on the criteria above.]
 `);
 }
 
 export function getAseMessagePart(): TextPart {
     return {
         type: 'text',
-        text: `Analyze the provided paper for the ASE 2025 Industry Showcase track.
-Focus on industrial relevance, impact, and practical application and use the review criteria and output format from the system prompt, as laid out in detail in the system prompt.
-Present the final review that should be sent to the authors.`,
+        text: `Analyze the provided paper for the ASE Industry Showcase track.
+Focus on industrial relevance, impact, and practical application. Follow the review criteria and output format defined by the system prompt.
+Produce the complete review in the exact format defined by the system prompt.`,
     };
 }
 
 export function getSectionAnalysisSystemPrompt(body: SectionAnalysisBody) {
+    const analysisFocus = getAnalysisFocusForKind(body.kind);
     return withCurrentDate(`You are an intelligent writing assistant for reviewing a computer science ${body.kind}.
 You are proficient in computer science and software engineering, with expert knowledge in technical and scientific writing in the field of computer science.
+${getAnalysisAudienceGuidance(analysisFocus, body.kind)}
 
 You analyze one specific section in ${body.workInProgress ? 'a work in progress, so keep this in mind. You can already suggest improvements for parts that are not yet implemented or marked with TODO.' : 'a completed work that is ready for review.'}
-${body.hasPageLimit ? `The ${body.kind} has a page limit of ${body.pageLimit} pages, and currently has ${body.currentPages} pages. Keep this restriction in mind when suggesting changes. If the paper is currently too long, you might provide professional advice on how to shorten the paper without losing quality.` : 'The work does not have a page limit.'}
+${body.hasPageLimit ? `The ${body.kind} has a page limit of ${body.pageLimit} pages, and currently has ${body.currentPages} pages. Keep this restriction in mind when suggesting changes. If the work is currently too long, you might provide professional advice on how to shorten it without losing quality.` : 'The work does not have a page limit.'}
 
 Be really honest, do not hold back critique if necessary.
 Your analyses, feedback and suggestions must be helpful, they should be professional and in a constructive tone.
@@ -317,20 +391,17 @@ Important: When analyzing text files, always ignore comments (for example, lines
 }
 
 export function getSectionAnalysisMessagePart(body: SectionAnalysisBody): TextPart {
+    const analysisFocus = getAnalysisFocusForKind(body.kind);
     return {
         type: 'text',
-        text: `Provide a comprehensive analysis of the section ${body.sectionTitle} in this ${body.kind} according to the following format (do not write a introductory paragraph, just start with the analysis):
+        text: `Provide a comprehensive analysis of the section ${body.sectionTitle} in this ${body.kind} according to the following format (do not write an introductory paragraph; start directly with the analysis):
 
 # Feedback on Section "${body.sectionTitle}"
 
 <<<
 Zone in on the section "${body.sectionTitle}" and provide a comprehensive analysis of this section, focusing on the following aspects:
 
-- Assess for **adherence to standards of scientific writing**.
-- Assess **understandability**. For example, are there areas where explanations are overly complicated or difficult to understand? Are enough examples and figures used to support complex parts? Are technical terms and abbreviations explained in enough detail?
-- Assess **structure**. We strive for good reading flow and readability. For example, does each chapter use a clear structure with subsections, paragraphs, and so on? Are structural elements (lists, enumerations, tables, etc.) used where applicable? Are conjunctions between sentences and transitions between sections and paragraphs used to enhance flow?
-- Assess **clarity and text quality**. We want easy-to-follow text that still provides enough detail.
-- Assess **all other quality aspects** that are relevant to a computer science ${body.kind}.
+${getSectionAnalysisFeedbackCriteria(body.kind, analysisFocus)}
 >>>
 
 # Recommendations on Section "${body.sectionTitle}"
@@ -339,13 +410,12 @@ Zone in on the section "${body.sectionTitle}" and provide a comprehensive analys
 For section "${body.sectionTitle}", provide a comprehensive list of the most important recommended improvements.
 Aim your feedback at specific parts of the text that can be improved.
 
-Provide concise, focused, concrete actionable improvements:
-- Each recommendation should have:
---- A "Title"
---- A "Description" of the issue
---- The "Original" text 
---- The actionable "Suggestion" (Make sure your suggestions can be easily integrated, for example by providing concrete text fixes, alternative versions to existing text, or answers to questions that should be addressed.)
---- An "Explanation" to compare your suggestion with the existing content to highlight the improvement.
+Provide concise, focused, concrete actionable improvements. Each recommendation must include:
+- **Title**
+- **Description:** a short description of the issue
+- **Original:** the original text
+- **Suggestion:** an actionable change that can be integrated easily, such as a concrete text fix, an alternative formulation, or an answer to a question that should be addressed
+- **Explanation:** a short comparison showing why the suggestion improves the original
 >>>
 `,
     };

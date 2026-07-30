@@ -137,7 +137,7 @@ function isValidationHint(error: unknown): boolean {
 
             <div v-if="paperStore.hasPageLimit" class="form-group">
               <label for="pageLimit">Page Limit (# of pages)</label>
-              <input type="number" id="pageLimit" v-model.number="paperStore.pageLimit" step="0.5" min="0" />
+              <input type="number" id="pageLimit" v-model.number="paperStore.pageLimit" step="0.5" min="0.5" />
             </div>
 
             <div v-if="paperStore.hasPageLimit" class="form-group">

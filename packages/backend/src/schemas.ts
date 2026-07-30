@@ -5,7 +5,19 @@ import { z } from 'zod';
 
 const modelSchema = t.Union([t.Literal('pro'), t.Literal('flash')]);
 
-const paperKindSchema = t.Union([
+export const publicationKindSchema = t.Union([
+    t.Literal('short conference paper'),
+    t.Literal('full conference paper'),
+    t.Literal('journal paper'),
+]);
+
+export const studentWorkKindSchema = t.Union([
+    t.Literal('bachelor thesis'),
+    t.Literal('master thesis'),
+    t.Literal('university seminar paper'),
+]);
+
+export const paperKindSchema = t.Union([
     t.Literal('short conference paper'),
     t.Literal('full conference paper'),
     t.Literal('journal paper'),
@@ -14,7 +26,36 @@ const paperKindSchema = t.Union([
     t.Literal('university seminar paper'),
 ]);
 
+export type PaperKind = typeof paperKindSchema.static;
+export type PublicationKind = typeof publicationKindSchema.static;
+export type StudentWorkKind = typeof studentWorkKindSchema.static;
+
 // ─── Request body schemas ─────────────────────────────────────────────────────
+
+const promptSettingsProperties = {
+    workInProgress: t.BooleanString(),
+    hasPageLimit: t.BooleanString(),
+    pageLimit: t.String({ pattern: '^(0\\.\\d*[1-9]\\d*|[1-9]\\d*(\\.\\d+)?)$' }),
+    currentPages: t.String({ pattern: '^(0|[1-9]\\d*)(\\.\\d+)?$' }),
+};
+
+/** Context needed to build a review prompt without uploading the reviewed file. */
+export const promptContextSchema = t.Object({
+    kind: paperKindSchema,
+    ...promptSettingsProperties,
+});
+
+export const publicationPromptContextSchema = t.Object({
+    kind: publicationKindSchema,
+    ...promptSettingsProperties,
+});
+
+export const studentWorkPromptContextSchema = t.Object({
+    kind: studentWorkKindSchema,
+    ...promptSettingsProperties,
+});
+
+export type PromptContext = typeof promptContextSchema.static;
 
 export const sectionsBodySchema = t.Object({
     apiKey: t.Optional(t.String()),
@@ -29,41 +70,39 @@ export const reviewBodySchema = t.Object({
     model: modelSchema,
     file: t.File({ format: ['image', 'text', 'application/pdf', '.tex'] }),
     kind: paperKindSchema,
+    ...promptSettingsProperties,
     customSystemPrompt: t.Optional(t.String()),
     customMessagePart: t.Optional(t.String()),
-    workInProgress: t.Optional(t.BooleanString()),
-    hasPageLimit: t.Optional(t.BooleanString()),
-    pageLimit: t.Optional(t.String()),
-    currentPages: t.Optional(t.String()),
 });
 
 export type ReviewBody = typeof reviewBodySchema.static;
 
-export const analysisBodySchema = t.Object({
+const reviewRequestProperties = {
     apiKey: t.Optional(t.String()),
     model: modelSchema,
     file: t.File({ format: ['image', 'text', 'application/pdf', '.tex'] }),
-    hasPageLimit: t.Optional(t.BooleanString()),
-    pageLimit: t.Optional(t.String()),
-    currentPages: t.Optional(t.String()),
-    workInProgress: t.Optional(t.BooleanString()),
-    kind: paperKindSchema,
+    ...promptSettingsProperties,
     customSystemPrompt: t.Optional(t.String()),
     customMessagePart: t.Optional(t.String()),
+};
+
+export const publicationReviewBodySchema = t.Object({
+    ...reviewRequestProperties,
+    kind: publicationKindSchema,
 });
 
-export type AnalysisBody = typeof analysisBodySchema.static;
+export const studentWorkReviewBodySchema = t.Object({
+    ...reviewRequestProperties,
+    kind: studentWorkKindSchema,
+});
 
 export const sectionAnalysisBodySchema = t.Object({
     apiKey: t.Optional(t.String()),
     model: modelSchema,
     file: t.File({ format: ['image', 'text', 'application/pdf', '.tex'] }),
-    hasPageLimit: t.Optional(t.BooleanString()),
-    pageLimit: t.Optional(t.String()),
-    currentPages: t.Optional(t.String()),
-    sectionTitle: t.String(),
-    workInProgress: t.Optional(t.BooleanString()),
     kind: paperKindSchema,
+    ...promptSettingsProperties,
+    sectionTitle: t.String(),
     customSystemPrompt: t.Optional(t.String()),
     customMessagePart: t.Optional(t.String()),
 });

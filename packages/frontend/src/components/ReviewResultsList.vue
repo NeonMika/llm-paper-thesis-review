@@ -3,7 +3,13 @@
     <template #title>
       <div class="title-bar">
         <span>Review Results ({{ paperStore.reviews.length }})</span>
-        <Button v-if="paperStore.reviews.length > 0" label="Clear All" @click="handleClearAll" severity="danger" size="small" />
+        <Button
+          v-if="paperStore.reviews.length > 0"
+          label="Clear All"
+          @click="handleClearAll"
+          severity="danger"
+          size="small"
+        />
       </div>
     </template>
     <template #content>
@@ -20,10 +26,18 @@
               </span>
             </div>
             <div class="review-actions">
-              <button class="icon-button" @click.stop="toggleExpand(review.id)" :title="isExpanded(review.id) ? 'Collapse' : 'Expand'">
+              <button
+                class="icon-button"
+                @click.stop="toggleExpand(review.id)"
+                :title="isExpanded(review.id) ? 'Collapse' : 'Expand'"
+              >
                 {{ isExpanded(review.id) ? '▲' : '▼' }}
               </button>
-              <button class="icon-button delete" @click.stop="handleDelete(review.id)" title="Delete">
+              <button
+                class="icon-button delete"
+                @click.stop="handleDelete(review.id)"
+                title="Delete"
+              >
                 🗑️
               </button>
             </div>
@@ -37,7 +51,9 @@
               </div>
               <div class="file-info">
                 <strong>{{ review.fileName }}</strong>
-                <pre v-if="review.fileContentPreview" class="file-preview">{{ review.fileContentPreview }}</pre>
+                <pre v-if="review.fileContentPreview" class="file-preview">{{
+                  review.fileContentPreview
+                }}</pre>
                 <span v-else class="no-preview">(Binary file - no preview available)</span>
               </div>
             </div>
@@ -52,7 +68,11 @@
                   </button>
                 </div>
               </div>
-              <pre class="prompt-content" :class="{ collapsed: !isPromptExpanded(review.id, 'system') }">{{ review.systemPrompt }}</pre>
+              <pre
+                class="prompt-content"
+                :class="{ collapsed: !isPromptExpanded(review.id, 'system') }"
+                >{{ review.systemPrompt }}</pre
+              >
             </div>
 
             <!-- Message Part -->
@@ -65,7 +85,11 @@
                   </button>
                 </div>
               </div>
-              <pre class="prompt-content" :class="{ collapsed: !isPromptExpanded(review.id, 'message') }">{{ review.messagePart }}</pre>
+              <pre
+                class="prompt-content"
+                :class="{ collapsed: !isPromptExpanded(review.id, 'message') }"
+                >{{ review.messagePart }}</pre
+              >
             </div>
 
             <!-- Result -->
@@ -76,7 +100,11 @@
                   <button class="toggle-button" @click="toggleResultFormat(review.id)">
                     {{ isResultMarkdown(review.id) ? '▼ Show Formatted' : '▶ Show Markdown' }}
                   </button>
-                  <button v-if="isResultMarkdown(review.id)" class="toggle-button" @click="copyMarkdown(review.result)">
+                  <button
+                    v-if="isResultMarkdown(review.id)"
+                    class="toggle-button"
+                    @click="copyMarkdown(review.result)"
+                  >
                     📋 Copy
                   </button>
                 </div>
@@ -92,7 +120,10 @@
               <!-- User turn -->
               <div class="thread-turn user-turn">
                 <div class="turn-header">
-                  <span class="turn-badge" :class="followUp.mode === 'file' ? 'badge-file' : 'badge-text'">
+                  <span
+                    class="turn-badge"
+                    :class="followUp.mode === 'file' ? 'badge-file' : 'badge-text'"
+                  >
                     {{ followUp.mode === 'file' ? '📄 New File Version' : '💬 Text Follow-Up' }}
                   </span>
                   <span class="turn-meta">{{ formatDate(followUp.timestamp) }}</span>
@@ -109,9 +140,15 @@
                   <span class="turn-badge badge-assistant">🤖 Response</span>
                   <div class="header-with-button">
                     <button class="toggle-button" @click="toggleFollowUpFormat(followUp.id)">
-                      {{ isFollowUpMarkdown(followUp.id) ? '▼ Show Formatted' : '▶ Show Markdown' }}
+                      {{
+                        isFollowUpMarkdown(followUp.id) ? '▼ Show Formatted' : '▶ Show Markdown'
+                      }}
                     </button>
-                    <button v-if="isFollowUpMarkdown(followUp.id)" class="toggle-button" @click="copyMarkdown(followUp.response)">
+                    <button
+                      v-if="isFollowUpMarkdown(followUp.id)"
+                      class="toggle-button"
+                      @click="copyMarkdown(followUp.response)"
+                    >
                       📋 Copy
                     </button>
                   </div>
@@ -133,12 +170,16 @@
                   class="mode-button"
                   :class="{ active: getFollowUpMode(review.id) === 'text' }"
                   @click="setFollowUpMode(review.id, 'text')"
-                >💬 Text Message</button>
+                >
+                  💬 Text Message
+                </button>
                 <button
                   class="mode-button"
                   :class="{ active: getFollowUpMode(review.id) === 'file' }"
                   @click="setFollowUpMode(review.id, 'file')"
-                >📄 New File Version</button>
+                >
+                  📄 New File Version
+                </button>
               </div>
 
               <!-- Text mode -->
@@ -156,7 +197,11 @@
                 <div class="file-mode-inputs">
                   <label class="file-input-label">
                     <span>Select revised paper file:</span>
-                    <input type="file" class="hidden-file-input" @change="onFollowUpFileChange(review.id, $event)" />
+                    <input
+                      type="file"
+                      class="hidden-file-input"
+                      @change="onFollowUpFileChange(review.id, $event)"
+                    />
                   </label>
                   <span v-if="getFollowUpState(review.id).file" class="selected-file-name">
                     ✓ {{ getFollowUpState(review.id).file!.name }}
@@ -208,7 +253,11 @@ import Card from 'primevue/card'
 import Button from 'primevue/button'
 import { marked } from 'marked'
 import { usePaperStore } from '../stores/paperStore'
-import { DEFAULT_FILE_FOLLOW_UP_INSTRUCTION, REVIEW_TYPE_LABELS, type ReviewType } from '../constants'
+import {
+  DEFAULT_FILE_FOLLOW_UP_INSTRUCTION,
+  REVIEW_TYPE_LABELS,
+  type ReviewType,
+} from '../constants'
 
 const paperStore = usePaperStore()
 
@@ -257,8 +306,8 @@ function togglePromptExpand(reviewId: string, type: 'system' | 'message') {
   }
 }
 
-function getReviewTypeLabel(type: string): string {
-  return REVIEW_TYPE_LABELS[type as ReviewType] ?? type
+function getReviewTypeLabel(type: ReviewType): string {
+  return REVIEW_TYPE_LABELS[type] ?? type
 }
 
 function formatDate(date: Date): string {
@@ -268,7 +317,7 @@ function formatDate(date: Date): string {
     month: 'short',
     day: 'numeric',
     hour: '2-digit',
-    minute: '2-digit'
+    minute: '2-digit',
   })
 }
 
@@ -276,14 +325,16 @@ function handleDelete(reviewId: string) {
   pendingDeleteId.value = reviewId
   isDeleteAll.value = false
   confirmModalTitle.value = 'Delete Review'
-  confirmModalMessage.value = 'Are you sure you want to delete this review? This action cannot be undone.'
+  confirmModalMessage.value =
+    'Are you sure you want to delete this review? This action cannot be undone.'
   showConfirmModal.value = true
 }
 
 function handleClearAll() {
   isDeleteAll.value = true
   confirmModalTitle.value = 'Clear All Reviews'
-  confirmModalMessage.value = 'Are you sure you want to delete all reviews? This action cannot be undone.'
+  confirmModalMessage.value =
+    'Are you sure you want to delete all reviews? This action cannot be undone.'
   showConfirmModal.value = true
 }
 
@@ -346,7 +397,7 @@ function getFollowUpState(reviewId: string): FollowUpState {
       mode: 'text',
       file: null,
       fileInstruction: '',
-      textMessage: ''
+      textMessage: '',
     }
   }
   return followUpStates[reviewId]
@@ -376,7 +427,7 @@ function getFollowUpError(reviewId: string): string {
 function canSendFollowUp(reviewId: string): boolean {
   const state = getFollowUpState(reviewId)
   if (state.mode === 'file') return !!state.file
-  return !!(state.textMessage?.trim())
+  return !!state.textMessage?.trim()
 }
 
 function isFollowUpMarkdown(followUpId: string): boolean {
@@ -397,14 +448,14 @@ async function sendFollowUp(reviewId: string) {
       await paperStore.sendFollowUpRequest(reviewId, {
         mode: 'file',
         file: state.file,
-        textMessage: state.fileInstruction || undefined
+        textMessage: state.fileInstruction || undefined,
       })
       state.file = null
       state.fileInstruction = ''
     } else if (state.mode === 'text') {
       await paperStore.sendFollowUpRequest(reviewId, {
         mode: 'text',
-        textMessage: state.textMessage
+        textMessage: state.textMessage,
       })
       state.textMessage = ''
     }
@@ -441,7 +492,9 @@ async function sendFollowUp(reviewId: string) {
   border: 1px solid #e5e7eb;
   border-radius: 8px;
   overflow: hidden;
-  transition: box-shadow 0.2s, border-color 0.2s;
+  transition:
+    box-shadow 0.2s,
+    border-color 0.2s;
 }
 
 .review-card:hover {

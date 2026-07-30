@@ -2,8 +2,13 @@ import { computed, watch, type Ref, ref } from 'vue'
 import { defineStore } from 'pinia'
 
 import api, { BASE_URL } from '../api'
-import type { Section } from '../../../backend/src'
-import { DEFAULT_FILE_FOLLOW_UP_INSTRUCTION } from '../constants'
+import type { PaperKind, PublicationKind, Section, StudentWorkKind } from '../../../backend/src'
+import {
+  DEFAULT_FILE_FOLLOW_UP_INSTRUCTION,
+  isReviewType,
+  isReviewTypeCompatible,
+} from '../constants'
+import type { ReviewType } from '../constants'
 
 export interface FollowUp {
   id: string
@@ -16,7 +21,7 @@ export interface FollowUp {
 
 export interface Review {
   id: string
-  type: string
+  type: ReviewType
   systemPrompt: string
   messagePart: string
   result: string
@@ -28,8 +33,19 @@ export interface Review {
 
 // Centralized list of text file extensions (previewable/readable as text)
 const TEXT_FILE_EXTENSIONS = [
-  '.txt', '.tex', '.md', '.html', '.css', '.js', '.ts',
-  '.py', '.java', '.c', '.cpp', '.h', '.hpp'
+  '.txt',
+  '.tex',
+  '.md',
+  '.html',
+  '.css',
+  '.js',
+  '.ts',
+  '.py',
+  '.java',
+  '.c',
+  '.cpp',
+  '.h',
+  '.hpp',
 ]
 
 export const usePaperStore = defineStore('paper', () => {
@@ -54,15 +70,17 @@ export const usePaperStore = defineStore('paper', () => {
   }
 
   const wip = ref(false)
-  const paperType: Ref<
-    'full conference paper' | 'short conference paper' | 'journal paper' | 'bachelor thesis' | 'master thesis' | 'university seminar paper'
-  > = ref('full conference paper')
+  const paperType: Ref<PaperKind> = ref('full conference paper')
   const hasPageLimit = ref(false)
-  const pageLimit = ref(0)
+  const pageLimit = ref(1)
   const currentPages = ref(0)
 
-  watch(pageLimit, (v) => { if (v < 0) pageLimit.value = 0 })
-  watch(currentPages, (v) => { if (v < 0) currentPages.value = 0 })
+  watch(pageLimit, (v) => {
+    if (v < 0.5) pageLimit.value = 0.5
+  })
+  watch(currentPages, (v) => {
+    if (v < 0) currentPages.value = 0
+  })
 
   const paperTypes = ref([
     { optionLabel: 'Full Conference Paper', optionValue: 'full conference paper' },
@@ -74,8 +92,8 @@ export const usePaperStore = defineStore('paper', () => {
   ])
 
   // Google Gemini Settings
-  const apiKey = ref<string>('');
-  const model = ref<'pro' | 'flash'>('flash');
+  const apiKey = ref<string>('')
+  const model = ref<'pro' | 'flash'>('flash')
 
   function getFileExtension(fileName: string): string {
     const idx = fileName.lastIndexOf('.')
@@ -84,7 +102,7 @@ export const usePaperStore = defineStore('paper', () => {
 
   function isTextFileName(fileName: string): boolean {
     const lower = fileName.toLowerCase()
-    return TEXT_FILE_EXTENSIONS.some(ext => lower.endsWith(ext))
+    return TEXT_FILE_EXTENSIONS.some((ext) => lower.endsWith(ext))
   }
 
   // Reviews management
@@ -96,16 +114,25 @@ export const usePaperStore = defineStore('paper', () => {
     try {
       const stored = localStorage.getItem(REVIEWS_STORAGE_KEY)
       if (stored) {
-        const parsed = JSON.parse(stored)
+        const parsed: unknown = JSON.parse(stored)
+        if (!Array.isArray(parsed)) throw new Error('Stored reviews must be an array')
         // Convert timestamp strings back to Date objects
-        reviews.value = parsed.map((r: Review) => ({
-          ...r,
-          timestamp: new Date(r.timestamp),
-          followUps: (r.followUps ?? []).map((f: FollowUp) => ({
-            ...f,
-            timestamp: new Date(f.timestamp)
-          }))
-        }))
+        reviews.value = parsed.flatMap((value: unknown) => {
+          if (typeof value !== 'object' || value === null || !isReviewType(Reflect.get(value, 'type'))) {
+            return []
+          }
+          const review = value as Review
+          return [
+            {
+              ...review,
+              timestamp: new Date(review.timestamp),
+              followUps: (review.followUps ?? []).map((followUp: FollowUp) => ({
+                ...followUp,
+                timestamp: new Date(followUp.timestamp),
+              })),
+            },
+          ]
+        })
       }
     } catch (error) {
       console.error('Failed to load reviews from localStorage:', error)
@@ -147,12 +174,13 @@ export const usePaperStore = defineStore('paper', () => {
 
   // Add a new review
   async function addReview(
-    type: string,
+    type: ReviewType,
     systemPrompt: string,
     messagePart: string,
-    result: string
+    result: string,
+    reviewedFile: File,
   ) {
-    const fileContentPreview = file.value ? await extractFilePreview(file.value) : ''
+    const fileContentPreview = await extractFilePreview(reviewedFile)
 
     const review: Review = {
       id: crypto.randomUUID(),
@@ -161,9 +189,9 @@ export const usePaperStore = defineStore('paper', () => {
       messagePart,
       result,
       timestamp: new Date(),
-      fileName: file.value?.name || 'Unknown file',
+      fileName: reviewedFile.name,
       fileContentPreview,
-      followUps: []
+      followUps: [],
     }
 
     // Add to beginning (newest first)
@@ -173,7 +201,7 @@ export const usePaperStore = defineStore('paper', () => {
 
   // Delete a specific review
   function deleteReview(id: string) {
-    reviews.value = reviews.value.filter(r => r.id !== id)
+    reviews.value = reviews.value.filter((r) => r.id !== id)
     saveReviewsToStorage()
   }
 
@@ -185,7 +213,6 @@ export const usePaperStore = defineStore('paper', () => {
 
   // Initialize reviews from storage
   loadReviewsFromStorage()
-
 
   // Input: a file from <input type="file">; only load text content for text files
   async function readPaperFromFile(readFile: File | null) {
@@ -222,7 +249,7 @@ export const usePaperStore = defineStore('paper', () => {
     loadingSections.value = true
     const { data, error } = await api.sections.post({
       file: file.value,
-      apiKey: apiKey.value || "",
+      apiKey: apiKey.value || '',
       model: model.value,
     })
     loadingSections.value = false
@@ -235,11 +262,14 @@ export const usePaperStore = defineStore('paper', () => {
   }
 
   async function sendReviewRequest(
-    type: 'analysis' | 'analysis-detailed' | 'review' | 'ase-review',
+    type: ReviewType,
     customSystemPrompt?: string,
-    customMessagePart?: string
+    customMessagePart?: string,
   ): Promise<string> {
     if (!file.value) throw new Error('File must be selected')
+    if (!isReviewTypeCompatible(type, paperType.value)) {
+      throw new Error(`Review type "${type}" is not compatible with ${paperType.value}.`)
+    }
 
     // Build request body with optional custom prompt fields
     const requestBody: {
@@ -261,7 +291,7 @@ export const usePaperStore = defineStore('paper', () => {
       workInProgress: wip.value,
       hasPageLimit: hasPageLimit.value,
       pageLimit: pageLimit.value + '',
-      currentPages: currentPages.value + ''
+      currentPages: currentPages.value + '',
     }
 
     if (customSystemPrompt?.trim()) {
@@ -271,43 +301,33 @@ export const usePaperStore = defineStore('paper', () => {
       requestBody.customMessagePart = customMessagePart
     }
 
+    const publicationRequestBody = {
+      ...requestBody,
+      kind: requestBody.kind as PublicationKind,
+    }
+    const studentWorkRequestBody = {
+      ...requestBody,
+      kind: requestBody.kind as StudentWorkKind,
+    }
+    const sendRequest = {
+      'thesis-analysis': () => api.reviews['thesis-analysis'].post(studentWorkRequestBody),
+      'thesis-analysis-detailed': () =>
+        api.reviews['thesis-analysis-detailed'].post(studentWorkRequestBody),
+      analysis: () => api.reviews.analysis.post(publicationRequestBody),
+      'analysis-detailed': () => api.reviews['analysis-detailed'].post(publicationRequestBody),
+      'review-critical': () => api.reviews['review-critical'].post(publicationRequestBody),
+      review: () => api.reviews.review.post(publicationRequestBody),
+      'review-guardian': () => api.reviews['review-guardian'].post(publicationRequestBody),
+      'ase-review-critical': () => api.reviews['ase-review-critical'].post(publicationRequestBody),
+      'ase-review': () => api.reviews['ase-review'].post(publicationRequestBody),
+      'ase-review-guardian': () => api.reviews['ase-review-guardian'].post(publicationRequestBody),
+    } satisfies Record<ReviewType, () => Promise<unknown>>
+
     loadingReview.value = true
     try {
-      let result = ''
-      switch (type) {
-        case 'analysis':
-          {
-            const { data, error } = await api.overall_analysis_general.post(requestBody)
-            if (error) throw error
-            result = data
-          }
-          break
-        case 'analysis-detailed':
-          {
-            const { data, error } = await api.overall_analysis_detailed.post(requestBody)
-            if (error) throw error
-            result = data
-          }
-          break
-        case 'review':
-          {
-            const { data, error } = await api.review.post(requestBody)
-            if (error) throw error
-            result = data
-          }
-          break
-        case 'ase-review':
-          {
-            const { data, error } = await api.ase.post(requestBody)
-            if (error) throw error
-            result = data
-          }
-          break
-      }
-      return result
-    } catch (error) {
-      // Error is propagated to caller
-      throw error
+      const { data, error } = await sendRequest[type]()
+      if (error) throw error
+      return data
     } finally {
       loadingReview.value = false
     }
@@ -343,9 +363,9 @@ export const usePaperStore = defineStore('paper', () => {
 
   async function sendFollowUpRequest(
     reviewId: string,
-    options: { mode: 'file' | 'text'; file?: File; textMessage?: string }
+    options: { mode: 'file' | 'text'; file?: File; textMessage?: string },
   ): Promise<void> {
-    const review = reviews.value.find(r => r.id === reviewId)
+    const review = reviews.value.find((r) => r.id === reviewId)
     if (!review) throw new Error('Review not found')
 
     // Build text-only conversation history from the review's conversation so far
@@ -394,9 +414,10 @@ export const usePaperStore = defineStore('paper', () => {
       timestamp: new Date(),
       mode: options.mode,
       fileName: options.mode === 'file' ? options.file?.name : undefined,
-      userMessage: options.mode === 'text'
-        ? (options.textMessage ?? '')
-        : (options.textMessage?.trim() || DEFAULT_FILE_FOLLOW_UP_INSTRUCTION),
+      userMessage:
+        options.mode === 'text'
+          ? (options.textMessage ?? '')
+          : options.textMessage?.trim() || DEFAULT_FILE_FOLLOW_UP_INSTRUCTION,
       response: responseText,
     }
 
@@ -455,6 +476,5 @@ export const usePaperStore = defineStore('paper', () => {
     // Errors
     sectionsError,
     sectionAnalysisError,
-
   }
 })

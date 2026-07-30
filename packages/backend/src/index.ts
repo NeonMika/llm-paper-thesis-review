@@ -3,13 +3,13 @@ import { Elysia } from 'elysia';
 import { swagger } from '@elysiajs/swagger';
 import { cors } from '@elysiajs/cors';
 
-import { analysisRoutes } from './routes/analysis.ts';
 import { sectionRoutes } from './routes/section.ts';
 import { reviewRoutes } from './routes/review.ts';
 import { followUpRoutes } from './routes/followUp.ts';
 import { promptPreviewRoutes } from './routes/promptPreview.ts';
 
-export type { Section } from './schemas.ts';
+export type { PaperKind, PublicationKind, Section, StudentWorkKind } from './schemas.ts';
+export type { ReviewType } from './reviewTypePrompts.ts';
 
 const app = new Elysia({
     serve: {
@@ -18,7 +18,6 @@ const app = new Elysia({
 })
     .use(cors())
     .use(swagger())
-    .use(analysisRoutes)
     .use(sectionRoutes)
     .use(reviewRoutes)
     .use(followUpRoutes)

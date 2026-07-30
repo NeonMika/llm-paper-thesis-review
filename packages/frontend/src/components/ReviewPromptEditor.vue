@@ -8,9 +8,20 @@
     <!-- Review Type Selector -->
     <div class="field">
       <label for="review-type">Review Type</label>
-      <select id="review-type" v-model="selectedReviewType" @change="handleReviewTypeChange" class="form-select" :disabled="!paperStore.file">
+      <select
+        id="review-type"
+        :value="selectedReviewType"
+        @change="handleReviewTypeChange"
+        class="form-select"
+        :disabled="!paperStore.file || loading"
+      >
         <option value="">Select a review type...</option>
-        <option v-for="[value, label] in Object.entries(REVIEW_TYPE_LABELS)" :key="value" :value="value">
+        <option
+          v-for="[value, label] in REVIEW_TYPE_OPTIONS"
+          :key="value"
+          :value="value"
+          :disabled="!isReviewTypeCompatible(value, paperType)"
+        >
           {{ label }}
         </option>
       </select>
@@ -22,8 +33,14 @@
         System Prompt
         <span v-if="isDirty" class="dirty-indicator">*</span>
       </label>
-      <textarea id="system-prompt" v-model="promptStore.currentSystemPrompt" rows="10" class="prompt-textarea"
-        placeholder="System prompt will load here..."></textarea>
+      <textarea
+        id="system-prompt"
+        v-model="promptStore.currentSystemPrompt"
+        rows="10"
+        class="prompt-textarea"
+        placeholder="System prompt will load here..."
+        :disabled="isLoadingPrompt || loading"
+      ></textarea>
     </div>
 
     <!-- Message Part Editor -->
@@ -32,26 +49,61 @@
         Message Part
         <span v-if="isDirty" class="dirty-indicator">*</span>
       </label>
-      <textarea id="message-part" v-model="promptStore.currentMessagePart" rows="10" class="prompt-textarea"
-        placeholder="Message part will load here..."></textarea>
+      <textarea
+        id="message-part"
+        v-model="promptStore.currentMessagePart"
+        rows="10"
+        class="prompt-textarea"
+        placeholder="Message part will load here..."
+        :disabled="isLoadingPrompt || loading"
+      ></textarea>
     </div>
 
     <!-- Reload Prompts Warning -->
-    <div v-if="settingsChanged && selectedReviewType" class="warning-message reload-warning">
-      ⚠️ Settings have changed. The prompts may be outdated.
-      <Button label="Reload Prompts for Changed Settings" @click="reloadPrompts" severity="warning" size="small" />
+    <div
+      v-if="(settingsChanged || combinedPromptError) && selectedReviewType"
+      class="warning-message reload-warning"
+    >
+      <span v-if="settingsChanged">⚠️ Settings have changed. The prompts are outdated.</span>
+      <span v-else>Prompt loading failed. Retry when ready.</span>
+      <Button
+        :label="
+          combinedPromptError ? 'Retry Loading Prompts' : 'Reload Prompts for Changed Settings'
+        "
+        @click="reloadPrompts"
+        :loading="isLoadingPrompt"
+        :disabled="!isReviewTypeCompatible(selectedReviewType, paperType)"
+        severity="warning"
+        size="small"
+      />
     </div>
 
     <!-- Actions -->
     <div class="actions" v-if="selectedReviewType">
-      <Button label="Reset to Original" @click="resetPrompts" :disabled="!isDirty" severity="secondary" />
-      <Button :label="!paperStore.file ? 'Upload a file first' : 'Send Review Request'" @click="sendReview" :loading="loading"
-        :disabled="!paperStore.file" />
+      <Button
+        label="Reset to Original"
+        @click="resetPrompts"
+        :disabled="!isDirty || isLoadingPrompt || loading"
+        severity="secondary"
+      />
+      <Button
+        :label="!paperStore.file ? 'Upload a file first' : 'Send Review Request'"
+        @click="sendReview"
+        :loading="loading || isLoadingPrompt"
+        :disabled="
+          !paperStore.file ||
+          isLoadingPrompt ||
+          loadedReviewType !== selectedReviewType ||
+          settingsChanged ||
+          !promptsAreValid ||
+          !isReviewTypeCompatible(selectedReviewType, paperType)
+        "
+      />
     </div>
 
     <!-- Error Display -->
-    <div v-if="error" class="error-message">
-      {{ error }}
+    <div v-if="error || combinedPromptError" class="error-message">
+      {{ error || combinedPromptError }}
     </div>
   </div>
 
@@ -69,24 +121,24 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import Button from 'primevue/button'
 import { usePaperStore } from '../stores/paperStore'
 import { usePromptStore } from '../stores/promptStore'
-import { REVIEW_TYPE_LABELS } from '../constants'
+import { REVIEW_TYPE_OPTIONS, isReviewTypeCompatible, type ReviewType } from '../constants'
 
 const paperStore = usePaperStore()
 const promptStore = usePromptStore()
 const { file, wip, paperType, hasPageLimit, pageLimit, currentPages } = storeToRefs(paperStore)
-const { isDirty } = storeToRefs(promptStore)
+const { isDirty, combinedPromptError, isLoadingPrompt, loadedReviewType } = storeToRefs(promptStore)
 
-const selectedReviewType = ref('')
+const selectedReviewType = ref<ReviewType | ''>('')
 const loading = ref(false)
 const error = ref('')
 const showWarning = ref(false)
-const pendingReviewType = ref('')
-const previousReviewType = ref('')
+const pendingReviewType = ref<ReviewType | ''>('')
+const previousReviewType = ref<ReviewType | ''>('')
 
 // Track settings state to detect changes
 const settingsSnapshot = ref<{
@@ -97,38 +149,59 @@ const settingsSnapshot = ref<{
   currentPages: number
 } | null>(null)
 const settingsChanged = ref(false)
+const promptsAreValid = computed(
+  () =>
+    promptStore.currentSystemPrompt.trim().length > 0 &&
+    promptStore.currentMessagePart.trim().length > 0,
+)
 
 // Handle review type change with dirty check
-function handleReviewTypeChange() {
-  const newType = selectedReviewType.value
+async function loadSelectedPrompts(type: ReviewType) {
+  error.value = ''
+  const loaded = await loadPromptsForType(type)
+  if (loaded && selectedReviewType.value === type) {
+    takeSettingsSnapshot()
+  }
+}
+
+function handleReviewTypeChange(event: Event) {
+  const select = event.target as HTMLSelectElement
+  const newType = select.value as ReviewType | ''
 
   // If no previous type was selected or no unsaved changes, load directly
   if (!previousReviewType.value || !isDirty.value) {
+    selectedReviewType.value = newType
     previousReviewType.value = newType
-    pendingReviewType.value = newType
-    loadPromptsForType(newType)
-    takeSettingsSnapshot()
+    pendingReviewType.value = ''
+    if (newType) {
+      void loadSelectedPrompts(newType)
+    } else {
+      promptStore.cancelPromptLoad()
+    }
     return
   }
 
   // Unsaved changes: show warning and revert dropdown to previous selection
   pendingReviewType.value = newType
-  selectedReviewType.value = previousReviewType.value  // revert dropdown immediately
+  select.value = previousReviewType.value
   showWarning.value = true
 }
 
 function confirmWarning() {
+  const newType = pendingReviewType.value
   showWarning.value = false
-  selectedReviewType.value = pendingReviewType.value
-  previousReviewType.value = pendingReviewType.value
-  loadPromptsForType(pendingReviewType.value)
-  takeSettingsSnapshot()
+  selectedReviewType.value = newType
+  previousReviewType.value = newType
   pendingReviewType.value = ''
+  if (newType) {
+    void loadSelectedPrompts(newType)
+  } else {
+    promptStore.cancelPromptLoad()
+  }
 }
 
 function cancelWarning() {
   showWarning.value = false
-  // selectedReviewType was already reverted in handleReviewTypeChange
   pendingReviewType.value = ''
 }
 
@@ -142,7 +215,7 @@ function takeSettingsSnapshot() {
     paperType: paperType.value,
     hasPageLimit: hasPageLimit.value,
     pageLimit: pageLimit.value,
-    currentPages: currentPages.value
+    currentPages: currentPages.value,
   }
   settingsChanged.value = false
 }
@@ -165,10 +238,9 @@ function resetPrompts() {
   promptStore.resetToOriginal()
 }
 
-function reloadPrompts() {
+async function reloadPrompts() {
   if (selectedReviewType.value) {
-    loadPromptsForType(selectedReviewType.value)
-    takeSettingsSnapshot()
+    await loadSelectedPrompts(selectedReviewType.value)
   }
 }
 
@@ -178,42 +250,43 @@ async function sendReview() {
     return
   }
 
+  if (
+    loadedReviewType.value !== selectedReviewType.value ||
+    isLoadingPrompt.value ||
+    settingsChanged.value ||
+    !promptsAreValid.value ||
+    !isReviewTypeCompatible(selectedReviewType.value, paperType.value)
+  ) {
+    error.value = 'Load current, compatible, non-empty prompts before sending.'
+    return
+  }
+
+  const reviewType = selectedReviewType.value
+  const reviewedFile = file.value
+  const systemPrompt = promptStore.currentSystemPrompt
+  const messagePart = promptStore.currentMessagePart
+  const useCustomPrompts = isDirty.value
+
   loading.value = true
   error.value = ''
 
   try {
     const result = await paperStore.sendReviewRequest(
-      selectedReviewType.value as 'analysis' | 'analysis-detailed' | 'review' | 'ase-review',
-      promptStore.currentSystemPrompt,
-      promptStore.currentMessagePart
+      reviewType,
+      useCustomPrompts ? systemPrompt : undefined,
+      useCustomPrompts ? messagePart : undefined,
     )
 
     // Add review to store
-    await paperStore.addReview(
-      selectedReviewType.value,
-      promptStore.currentSystemPrompt,
-      promptStore.currentMessagePart,
-      result
-    )
+    await paperStore.addReview(reviewType, systemPrompt, messagePart, result, reviewedFile)
 
-    // Reset dirty state by reloading original prompts
-    await loadPromptsForType(selectedReviewType.value)
-    takeSettingsSnapshot()
-
+    promptStore.resetToOriginal()
   } catch (err) {
     error.value = `Failed to send review: ${err}`
   } finally {
     loading.value = false
   }
 }
-
-// Watch for file changes and reload prompts if a type is selected
-watch(file, () => {
-  if (selectedReviewType.value) {
-    loadPromptsForType(selectedReviewType.value)
-    takeSettingsSnapshot()
-  }
-})
 
 // Watch for settings changes
 watch([wip, paperType, hasPageLimit, pageLimit, currentPages], () => {
